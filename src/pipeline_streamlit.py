@@ -42,7 +42,7 @@ import ntpath
 import time as t
 import os
 import json
-import fitz
+#import fitz
 import logging
 import warnings
 import streamlit as st
