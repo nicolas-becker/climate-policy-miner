@@ -21,7 +21,7 @@ git clone https://github.com/nicolas-becker/climate-policy-miner.git
 Navigate to the root directory of the cloned repository:
 
 ```sh
-cd your-repository
+cd climate-policy-miner
 ```
 
 Create a new conda environment using the environment.yml file included in the repository:
