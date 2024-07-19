@@ -6,7 +6,7 @@ Before you can run the application, you need to have the following installed on 
 2. Click on the "Download" button.
 3. Once the installer has downloaded, open it to start the installation process.
 
-#### Anaconda
+#### Anaconda:
 1. Go to the [Anaconda Distribution page](https://www.anaconda.com/products/distribution).
 2. Download the installer for your operating system (Windows, macOS, or Linux).
 3. Run the installer and follow the on-screen instructions.
