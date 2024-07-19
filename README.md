@@ -34,7 +34,7 @@ conda env create -f environment.yml
 Activate the newly created conda environment by running:
 
 ```sh
-conda activate your-environment-name
+conda activate textmining_venv
 ```
 
 ### 5. Run the Application
