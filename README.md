@@ -40,7 +40,14 @@ Activate the newly created conda environment by running:
 conda activate textmining_venv
 ```
 
-### 4. Run the Application
+### 4. Gather API Keys for .env file
+Gather the necessary API Keys for
+- Unstructured
+- Pinecone
+- OpenAI / Azure OpenAI
+and insert them in the specified attributes of the .env file.
+
+### 5. Run the Application
 With the environment activated, you can now run the application by executing the pipeline.py script:
 
 ```sh
