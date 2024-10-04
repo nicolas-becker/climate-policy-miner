@@ -21,6 +21,27 @@ from tqdm import tqdm
 
 
 def compare_quotes_fuzzy(ground_truth, matched, threshold=80):
+    """
+    Compares two lists of quotes using fuzzy string matching and calculates
+    the number of true positives, false positives, and false negatives.
+
+    Parameters
+    ----------
+    ground_truth : list of str
+        The list of ground truth quotes.
+    matched : list of str
+        The list of matched quotes to compare against the ground truth.
+    threshold : int, optional
+        The similarity threshold for considering a match. The default is 80.
+
+    Returns
+    -------
+    tuple
+        A tuple containing three integers:
+            - true_positives (int): The number of quotes in `ground_truth` that have a match in `matched` with similarity >= `threshold`.
+            - false_positives (int): The number of quotes in `matched` that do not have a match in `ground_truth` with similarity >= `threshold`.
+            - false_negatives (int): The number of quotes in `ground_truth` that do not have a match in `matched` with similarity >= `threshold`.
+    """
     true_positives = 0
     false_positives = 0
     false_negatives = 0
@@ -54,28 +75,32 @@ def compare_quotes_fuzzy(ground_truth, matched, threshold=80):
 
 def namespace_exists(index, namespace):
     """
-    Check if namespace exists in Pinecone index.
-    From: https://community.pinecone.io/t/how-do-i-check-if-a-namespace-already-exists-in-an-index/2684/6
+    Check if a namespace exists in a Pinecone index.
+
+    This function queries the Pinecone index to retrieve the list of existing namespaces
+    and checks if the specified namespace is present in that list.
 
     Parameters
     ----------
-    index : TYPE
-        DESCRIPTION.
-    namespace : TYPE
-        DESCRIPTION.
-
+    index : pinecone.Index
+        The Pinecone index object to query.
+    namespace : str
+        The namespace to check for existence in the index.
+    
     Returns
     -------
-    TYPE
-        DESCRIPTION.
+    bool
+        True if the namespace exists in the index, False otherwise.
 
+    References
+    .. [1] https://community.pinecone.io/t/how-do-i-check-if-a-namespace-already-exists-in-an-index/2684/6
+    
     """
     namespaces = index.describe_index_stats()['namespaces']
     namespace_in_index = namespace in namespaces
     return namespace_in_index
 
 def create_highlighted_pdf(filename, quotes, output_path, df=None, color='yellow', opacity=0.5):
-    #TODO - create link to quote in document --> https://pymupdf.readthedocs.io/en/latest/the-basics.html#getting-page-links
     """
     Create highlighted PDF with PyMuPDF library. All extracted quotes are highlighted.
     https://pymupdf.readthedocs.io/en/latest/index.html
@@ -98,6 +123,7 @@ def create_highlighted_pdf(filename, quotes, output_path, df=None, color='yellow
         
     """
     #TODO: Highlighting Scanned Text - OCR
+    #TODO - create link to quote in document --> https://pymupdf.readthedocs.io/en/latest/the-basics.html#getting-page-links
     
     # read pdf with pymudpdf
     doc = fitz.open(filename)
@@ -168,9 +194,11 @@ def is_valid_url(url):
     Check if a URL is valid using a regular expression.
     
     Parameters:
+    ----------
     url (str): The URL to validate.
     
     Returns:
+    -------
     bool: True if the URL is valid, False otherwise.
     """
     regex = re.compile(
@@ -189,6 +217,7 @@ def download_pdf_wget(url, output_path):
     Download a PDF file from the given URL using wget.
 
     Parameters:
+    ----------
     url (str): The URL of the PDF file.
     output_path (str): The path where the downloaded PDF will be saved.
     """
@@ -201,6 +230,7 @@ def download_pdf_urllib(url, output_path):
     Download a PDF file from the given URL using urllib.
 
     Parameters:
+    ----------
     url (str): The URL of the PDF file.
     output_path (str): The path where the downloaded PDF will be saved.
     """
@@ -213,14 +243,13 @@ def extract_text_from_pdf(pdf_path):
 
     Parameters
     ----------
-    pdf_path : TYPE
-        DESCRIPTION.
+    pdf_path : str
+        The path to the PDF file from which text is to be extracted.
 
     Returns
     -------
-    text : TYPE
-        DESCRIPTION.
-
+    text : str
+        The extracted text from the PDF document.
     """
     document = fitz.open(pdf_path)
     text = ''
@@ -233,25 +262,24 @@ def extract_text_from_pdf(pdf_path):
 def find_text_context(text, search_text, context_length=400):
     """
     Search for the specified text within the extracted text.
-    Extract the preceding 100 characters and following 100 characters around the found text.
-    Save the extracted information back to your dataset.
+    Extract the preceding and following characters around the found text.
 
     Parameters
     ----------
-    text : TYPE
-        DESCRIPTION.
-    search_text : TYPE
-        DESCRIPTION.
-    context_length : TYPE, optional
-        DESCRIPTION. The default is 400. --> extacts text chunks of around 1000 chars - hard test conditions. Alternative: context_length=200 for easier conditions.
+    text : str
+        The text in which to search for the specified text.
+    search_text : str
+        The text to search for within the extracted text.
+    context_length : int, optional
+        The number of characters to extract before and after the found text. 
+        The default is 400.
 
     Returns
     -------
-    TYPE
-        DESCRIPTION.
-    TYPE
-        DESCRIPTION.
-
+    int
+        The starting index of the found text within the extracted text.
+    str
+        The context around the found text, including the preceding and following characters.
     """
     start_idx = text.find(search_text)
     if start_idx == -1:
@@ -269,15 +297,14 @@ def download_pdf(url, output_path):
 
     Parameters
     ----------
-    url : TYPE
-        DESCRIPTION.
-    output_path : TYPE
-        DESCRIPTION.
+    url : str
+        The URL of the PDF file to be downloaded.
+    output_path : str
+        The path where the downloaded PDF will be saved.
 
     Returns
     -------
     None.
-
     """
     response = requests.get(url)
     with open(output_path, 'wb') as file:
@@ -289,7 +316,9 @@ def decode_filenames_in_directory(directory):
     Decode all filenames in the specified directory that contain URL-encoded characters.
 
     Parameters:
-    directory (str): The path to the directory containing the files to be renamed.
+    ----------
+    directory : str 
+        The path to the directory containing the files to be renamed.
     """
     for filename in os.listdir(directory):
         decoded_filename = urllib.parse.unquote(filename)
@@ -300,24 +329,23 @@ def decode_filenames_in_directory(directory):
             print(f'Renamed: {filename} -> {decoded_filename}')
 
 
-def check_string_in_list(row: pd.Series, true:str, choice:str) -> str:
+def check_string_in_list(row: pd.Series, true: str, choice: str) -> str:
     """
     Function to check if the string 'true' is in the list 'choice'.
 
     Parameters
     ----------
     row : pd.Series
-        DESCRIPTION.
+        The row of a DataFrame being processed.
     true : str
-        DESCRIPTION.
+        The column name in the DataFrame whose value is to be checked.
     choice : str
-        DESCRIPTION.
+        The column name in the DataFrame containing the list to check against.
 
     Returns
     -------
     str
-        DESCRIPTION.
-
+        The value from the 'true' column if it is found in the 'choice' column list, otherwise np.nan.
     """
     return row[true] if row[true] in row[choice] else np.nan
 
@@ -332,11 +360,22 @@ def normalize_filename(filename):
 
 def plot_multiclass_precision_recall(y_score, y_true_untransformed, class_list, classifier_name):
     """
-    Precision-Recall plotting for a multiclass problem. It plots average precision-recall, per class precision recall and reference f1 contours.
-
-    Code slightly modified, but heavily based on https://scikit-learn.org/stable/auto_examples/model_selection/plot_precision_recall.html
-    
-    From: https://github.com/openai/openai-cookbook/blob/main/examples/utils/embeddings_utils.py
+    Plots the Precision-Recall curves for a multiclass classification problem.
+    This function generates a plot that includes:
+    - Precision-Recall curves for each class.
+    - An average Precision-Recall curve over all classes.
+    - Reference iso-F1 score contours.
+    Parameters:
+    - y_score (array-like): Estimated probabilities or decision function.
+    - y_true_untransformed (array-like): True labels before transformation.
+    - class_list (list): List of class labels.
+    - classifier_name (str): Name of the classifier for labeling the plot.
+        
+    References:
+    ----------
+    The function is based on examples from scikit-learn and OpenAI's cookbook.
+    [1] https://scikit-learn.org/stable/auto_examples/model_selection/plot_precision_recall.html
+    [2] https://github.com/openai/openai-cookbook/blob/main/examples/utils/embeddings_utils.py
     """
     n_classes = len(class_list)
     y_true = pd.concat(

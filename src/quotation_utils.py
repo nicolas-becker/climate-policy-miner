@@ -98,6 +98,17 @@ def get_quote_extraction_Pydantic_chain(llm):
 def quotes_revision_chain(llm):
     """
     Revise the relevance of extracted quotes.
+
+    Parameters
+    ----------
+    llm : langchain_openai.chat_models.base.ChatOpenAI
+        Language Model to be used for quote revision.
+
+    Returns
+    -------
+    quote_revision_chain : langchain_core.runnables.base.RunnableSequence
+        Chain object providing the prompt and output parser for quote revision.
+
     """
     # Set up a parser + inject instructions into the prompt template.
     pydantic_parser = PydanticOutputParser(pydantic_object=QuoteObject)

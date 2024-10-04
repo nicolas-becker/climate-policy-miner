@@ -17,12 +17,47 @@ logger = setup_logger(__name__, 'logfile.log')
 
 
 def pixels_to_points(pixel_bbox, dpi=150):
+    """
+    Converts a bounding box from pixel units to points.
+
+    Parameters
+    ----------
+    pixel_bbox : list of float
+        A list of coordinates representing the bounding box in pixels.
+    dpi : int, optional
+        Dots per inch (DPI) of the image. Default is 150.
+
+    Returns
+    -------
+    list of float
+        A list of coordinates representing the bounding box in points.
+    """
     points_per_inch = 72  # 1 point = 1/72 inch
     scale = points_per_inch / dpi
     return [coord * scale for coord in pixel_bbox]
 
 
 def highlight_retrieved_elements(filename, output_path, elements):
+    """
+    Highlights specified elements in a PDF document and saves the modified document under defined path.
+    
+    Parameters
+    ----------
+    filename : str 
+        The path to the input PDF file.
+    output_path : str
+        The path to save the modified PDF file.
+    elements : list
+        A list of dictionaries, where each dictionary contains:
+        - 'page_number' (int): The page number where the element is located.
+        - 'coordinates' (str): The coordinates of the element in string format, 
+            representing a bounding box with four points (x0, y0, x1, y1).
+
+    Returns
+    -------
+        None
+        
+    """
     # Open the PDF document
     doc = fitz.open(filename)
     
@@ -47,7 +82,6 @@ def highlight_retrieved_elements(filename, output_path, elements):
     doc.save(output_path, garbage=4, deflate=True, clean=True)
 
 
-### DEPRECATED
 def filter_by_score(d, threshold):
     """
     DEPRECATED
@@ -143,3 +177,4 @@ def get_docs_from_vectorstore(vectorstore, index_name, namespace, query, embeddi
     
     return rel_docs
 
+        

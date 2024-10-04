@@ -30,10 +30,10 @@ from langsmith import traceable
 
 from general_utils import download_pdf, setup_logger, is_valid_url
 
-# Set logging
+#  Set logging
 logger = setup_logger(__name__, 'logfile.log')
 
-
+#  Load environment variables
 load_dotenv()
 
 

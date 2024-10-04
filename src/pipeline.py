@@ -11,7 +11,7 @@ From PDF ingestion to classification output
 
 Step 1: Preprocessing
     - Send PDF to Unstructured
-    - Postprocess Results to Element Objects
+    - Postprocess results to Element Objects
     - Split Elements by Element type
     - Summarize contents
     - Pass Summaries to VectorStore with Metadata
@@ -84,7 +84,7 @@ os.environ["LANGCHAIN_PROJECT"] = "climate_policy_pipeline"
 
 ## Params
 
-#TODO: Check with Marion/Nikola/Tim
+#  Initial keyword list for query
 keywords = ["Transport",
             "Energy",
             "Net Zero",
@@ -95,22 +95,16 @@ keywords = ["Transport",
             "Measure"
             ]
 
-keywords_ALT = ["Transport Sector",
-                "Energy Sector",
-                "Net Zero Target",
-                "Mitigation Measure",
-                "Adaptation Measure",
-                "Conditional"
-                ]
-
+#  Inferred query from frequent tokens in database
 token_query =  "transport  vehicles  emissions  BA  electric U  GH  reduction  public G  compared  scenario  transportation  reduce  CO  levels  net es  zero  fuel  vehicle  em  passenger  road  mobility  veh  target  new idad CO  Mt  car ision  transporte  rail  cars  fleet  buses  fuels  traffic  efficiency ículos ar ct e  gas  greenhouse  redu  freight  d  l  share  km o  bio  achieve os  elé els  hydrogen  urban  infrastructure  electr The  hybrid  relative  charging  neutrality eq  é ici )  least  total ado  emission  vé  standards én  aims  e  ambition ’  modes il  carbon  shift as  neutral fu  bus  EV  ré  mov  condition hic  sales  million cción  inter  año  modal  maritime  system  diesel  público  kt  network ules  alternative  cities  percent  heavy re  conditional  Transport  improvement -em  Electric RT  level  use nel  transit  roads  in  light ibles  energ  year rica  goal  aviation  per missions  long  powered  European  consumption arbon ric  lanes  vo  part  walking  sharing  rapport ación  t  bicycle  motor  stations  infra  s duction ov a To  sc  railways  cent  private ías  reductions ). ual r  achieved ada -m condition  élect  ef"
 
+#  Combination of token_query and keywords
 combined_query =  "transport  vehicles  emissions  BA  electric U  GH  reduction  public G  compared  scenario  transportation  reduce  CO  levels  net es  zero  fuel  vehicle  em  passenger  road  mobility  veh  target  new idad CO  Mt  car ision  transporte  rail  cars  fleet  buses  fuels  traffic  efficiency ículos ar ct e  gas  greenhouse  redu  freight  d  l  share  km o  bio  achieve os  elé els  hydrogen  urban  infrastructure  electr The  hybrid  relative  charging  neutrality eq  é ici )  least  total ado  emission  vé  standards én  aims  e  ambition ’  modes il  carbon  shift as  neutral fu  bus  EV  ré  mov  condition hic  sales  million cción  inter  año  modal  maritime  system  diesel  público  kt  network ules  alternative  cities  percent  heavy re  conditional  Transport  improvement -em  Electric RT  level  use nel  transit  roads  in  light ibles  energ  year rica  goal  aviation  per missions  long  powered  European  consumption arbon ric  lanes  vo  part  walking  sharing  rapport ación  t  bicycle  motor  stations  infra  s duction ov a To  sc  railways  cent  private ías  reductions ). ual r  achieved ada -m condition  élect  ef Transport Energy Net Zero Mitigation Adaptation Conditional Target Measure"
 
 #  Vectorstore index name and namespace
 index_name = "ndc-summaries"
 
-## Configuration
+#  Load .env file
 load_dotenv()
 
 #  Text model - Azure OpenAI - currently gpt-4-0613 --> https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models#gpt-4-and-gpt-4-turbo-models
@@ -120,6 +114,8 @@ text_model = AzureChatOpenAI(
     model_version='0613',
     temperature=0
 )
+
+### if GPT Access is not possible via MS Azure, replace the text_model with the following: 
 #text_model = ChatOpenAI(temperature=0, model='gpt-4o')
 
 #  Vision model
@@ -129,6 +125,8 @@ vision_model = AzureChatOpenAI(
     model_version='0613',
     temperature=0
 )
+
+### if GPT Access is not possible via MS Azure, replace the vision_model with the following: 
 #vision_model = ChatOpenAI(temperature=0, model="gpt-4o", max_tokens=1024)
 
 
@@ -139,7 +137,7 @@ embeddings = AzureOpenAIEmbeddings(openai_api_key=os.environ["AZURE_OPENAI_API_K
 
 
 
-#%%
+#%% Pipeline
 @track_emissions
 def main():
     
@@ -197,7 +195,8 @@ def main():
                 texts = [i.text for i in text_elements]
                 tables = [i.text_as_html for i in table_elements]
                 
-                """
+                """ Summaries currently not used
+
                 #  Summarize Texts
                 start_time = t.time()
                 text_summaries = summarize_text(elements=texts, model=text_model)
@@ -321,8 +320,9 @@ def main():
             #vectorstore = PineconeVectorStore.from_existing_index(index_name=index_name, embedding=embeddings, namespace=namespace)
             
             #  dynamic query with similarity threshold
+            sim_threshold = 0.75
             k_static = len(elements_chunked) # search entire set of partitions
-            rel_docs = get_docs_from_vectorstore(vectorstore=vectorstore, index_name=index_name, namespace=namespace, query=combined_query, embedding=embeddings, k=k_static, score_threshold=0.75)
+            rel_docs = get_docs_from_vectorstore(vectorstore=vectorstore, index_name=index_name, namespace=namespace, query=combined_query, embedding=embeddings, k=k_static, score_threshold=sim_threshold)
 
             #  Persist results in JSON Object
             with open(f"{file_directory}/by-products/retrieved_documents_{file_directory}.json", 'w') as f:
