@@ -42,9 +42,11 @@ conda activate textmining_venv
 
 ### 4. Gather API Keys for .env file
 Gather the necessary API Keys for
+
 - Unstructured
 - Pinecone
 - OpenAI / Azure OpenAI
+  
 and insert them in the specified attributes of the .env file.
 
 ### 5. Run the Application
