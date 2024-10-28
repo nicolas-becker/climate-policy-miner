@@ -112,7 +112,7 @@ combined_query =  "transport  vehicles  emissions  BA  electric U  GH  reduction
 index_name = "ndc-summaries"
 
 ## Configuration
-load_dotenv()
+#load_dotenv()
 
 #  Text model - Azure OpenAI - currently gpt-4-0613 --> https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models#gpt-4-and-gpt-4-turbo-models
 text_model = AzureChatOpenAI(
