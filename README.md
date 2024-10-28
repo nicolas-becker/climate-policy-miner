@@ -14,7 +14,7 @@ Before you can run the application, you need to have the following installed on 
 ## Step-by-Step Guide
 
 ### 1. Clone the Repository
-First, you need to clone the repository to your local machine. Open your terminal or command prompt and run the following command:
+First, you need to clone the repository to your local machine. Open the "Anaconda Prompt" and run the following command:
 
 ```sh
 git clone https://github.com/nicolas-becker/climate-policy-miner.git
@@ -43,9 +43,9 @@ conda activate textmining_venv
 ### 4. Gather API Keys for .env file
 Gather the necessary API Keys for
 
-- Unstructured
-- Pinecone
-- OpenAI / Azure OpenAI
+- [Unstructure.io](https://unstructured.io/)
+- [Pinecone.io](https://www.pinecone.io/)
+- [OpenAI.com](https://www.pinecone.io/) or via Azure
   
 and insert them in the specified attributes of the .env file.
 
