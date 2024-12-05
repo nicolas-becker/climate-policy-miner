@@ -1,3 +1,19 @@
+# Climate Policy Miner 🌍⛏️
+
+Welcome to **Climate Policy Miner**, a powerful tool for analyzing and extracting insights from climate policy documents. This repository is designed to streamline the processing of complex textual data, making it easier to uncover key information for research, decision-making, and advocacy. 🌱📜
+
+## What is Climate Policy Miner?
+
+Climate Policy Miner leverages cutting-edge natural language processing (NLP) tools and APIs to help you:  
+- 🔍 Analyze climate policy documents efficiently.  
+- ✨ Highlight relevant text passages.  
+- 📊 Generate structured outputs for further analysis.
+
+Whether you're a researcher, policymaker, or climate advocate, this tool is here to simplify your workflow and empower data-driven decisions. 
+
+Let’s get started! 🚀
+
+
 ## Prerequisites
 Before you can run the application, you need to have the following installed on your system:
 
@@ -84,3 +100,21 @@ python -i src/pipeline.py
      - Inside this folder, you will find the results in a subfolder called **"output"**:
        - `.csv` and `.xlsx` files containing the retrieved data.
        - A `.pdf` file containing highlighted text passages.
+
+## Demo
+
+https://github.com/user-attachments/assets/3b93bfcd-c9d5-439d-a0f7-328873f9a26f
+
+## API Usage
+
+### 🔧 Unstructured.io API
+- **Purpose:** Pre-processes and extracts clean, structured text from raw files (PDFs, Word documents, etc.).  
+- **Usage Tip:** Ensure that your documents are in formats supported by the API. Refer to the [Unstructured.io documentation](https://unstructured.io/) for more details. 
+- **Key Note:** For large files or complex documents, processing times may vary. This projects applies the Free API. Please refer to [Free Unstructured API](https://docs.unstructured.io/api-reference/api-services/free-api) for futher information on API access and limitations.
+
+### 🤖 ChatGPT (OpenAI) API
+- **Purpose:** Performs advanced natural language processing tasks, including summarization and extracting key insights from text.  
+- **Usage Tip:** Use this API to tailor analyses to specific questions or objectives. For example, you can extract sections of text related to "emissions targets" or "policy impacts."  
+- **Key Note:** Keep track of your token usage when using the OpenAI API, especially for large-scale analyses. Refer to the [OpenAI documentation](https://platform.openai.com/docs/) for managing your API calls effectively. Please refer to [OpenAI Pricing](https://openai.com/api/pricing/) or [Azure OpenAI Service](https://azure.microsoft.com/en-us/pricing/details/cognitive-services/openai-service/) for pricing information.
+
+
