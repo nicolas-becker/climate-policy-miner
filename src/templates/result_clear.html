@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>    
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Results</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f8ff;
+        }
+        .container {
+            margin-top: 50px;
+        }
+        .title {
+            font-size: 2em;
+            color: #333;
+        }
+        .form-group {
+            margin-top: 20px;
+        }
+        .button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1em;
+            color: #fff;
+            background-color: #007bff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+        .download-link {
+            display: block;
+            margin-top: 30px;
+            font-size: 1.2em;
+            color: #007bff;
+            text-decoration: none;
+        }
+        .download-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Analysis Complete 🎉</h1>
+    <p>Your analysis is complete. You can download the results below:</p>
+    <button class="button" onclick="window.location.href='{{ download_path }}'">Download Results ✅</button>
+    <p>If you want to analyze another document, click the button below to go back to the home page:</p>
+    <form action="/clear" method="post">
+        <button class="button" type="submit">Back to Home 🔙</button>
+    </form>
+</body>
+</html>

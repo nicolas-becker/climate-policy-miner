@@ -121,7 +121,7 @@ text_model = AzureChatOpenAI(
 #  Vision model
 vision_model = AzureChatOpenAI(
     openai_api_version=os.environ["AZURE_OPENAI_API_VERSION"],
-    azure_deployment=os.environ["AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"],
+    azure_deployment=os.environ["AZURE_OPENAI_CHAT_DEPLOYMENT_NAME_VISION"],
     model_version='0613',
     temperature=0
 )
