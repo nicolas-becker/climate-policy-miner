@@ -1,10 +1,10 @@
-# Climate Policy Miner 🌍⛏️
+# 🚍🌍 Transport and Climate Policy Miner 📃⛏️
 
-Welcome to **Climate Policy Miner**, a powerful tool for analyzing and extracting insights from climate policy documents. This repository is designed to streamline the processing of complex textual data, making it easier to uncover key information for research, decision-making, and advocacy. 🌱📜
+Welcome to **Transport and Climate Policy Miner**, a powerful tool for analyzing and extracting insights from climate policy documents. This repository is designed to streamline the processing of complex textual data, making it easier to uncover key information for research, decision-making, and advocacy. 🌱📜
 
-## What is Climate Policy Miner?
+## What is the Transport and Climate Policy Miner?
 
-Climate Policy Miner leverages cutting-edge natural language processing (NLP) tools and APIs to help you:  
+Transport and Climate Policy Miner leverages cutting-edge natural language processing (NLP) tools and APIs to help you:  
 - 🔍 Analyze climate policy documents efficiently.  
 - ✨ Highlight relevant text passages.  
 - 📊 Generate structured outputs for further analysis.
@@ -27,10 +27,67 @@ Before you can run the application, you need to have the following installed on 
 2. Download the installer for your operating system (Windows, macOS, or Linux).
 3. Run the installer and follow the on-screen instructions.
 
+
 ## Step-by-Step Guide
+If you are a first-time user, move down to the [respective section of this guide](https://github.com/nicolas-becker/climate-policy-miner/edit/main/README.md#first-time-user). If you have cloned the repository, and installed the dependencies and gathered the API Keys already, you can just follow the subsequent steps:
+
+### 1. Navigate to the repository
+
+Press the "Windows" button and open the "Anaconda Prompt".
+
+Navigate to the root directory of the repository:
+
+```sh
+cd climate-policy-miner
+```
+
+### 2. Activate the Environment
+Activate the conda environment by running:
+
+```sh
+conda activate textmining_venv
+```
+
+### 3. Run the Application
+With the environment activated, you can now run the application by executing the pipeline.py script:
+
+```sh
+python -i src/pipeline.py
+```
+
+### 4. Follow the instructions in the CLI 
+
+1. **File Selection:**
+   - When prompted:  
+     **"Paste the path or URL to the file you would like to be analyzed"**
+   - **Action:**  
+     Insert the path to the policy document located in your local repository.  
+     Alternatively, you can try pasting a URL to the document, but this option is **unstable** at the moment.
+
+2. **Pre-processing Step:**
+   - When prompted:  
+     **"Is the file already pre-processed? [y/n]"**
+   - **Action:**  
+     Type `n` and press `ENTER` if it's your first time analyzing the document.
+
+3. **Troubleshooting:**
+   - If the application **stops after the pre-processing step** without displaying results:
+     - **Action:**  
+       Type `quit()` to exit the CLI.
+     - Then, return to **Step 5** and try again.
+     - This is a known issue, and in such cases, you may type `y` when prompted if the file was already pre-processed.
+
+4. **Output:**
+   - Once the analysis is complete:
+     - A folder will be created in your repository, named after your document.
+     - Inside this folder, you will find the results in a subfolder called **"output"**:
+       - `.csv` and `.xlsx` files containing the retrieved data.
+       - A `.pdf` file containing highlighted text passages.
+
+## First-time User
 
 ### 1. Clone the Repository
-First, you need to clone the repository to your local machine. Open the "Anaconda Prompt" and run the following command:
+First, you need to clone the repository to your local machine. Press the "Windows" button and open the "Anaconda Prompt". Run the following command (Copy + Paste + Enter):
 
 ```sh
 git clone https://github.com/nicolas-becker/climate-policy-miner.git
