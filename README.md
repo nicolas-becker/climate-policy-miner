@@ -84,6 +84,7 @@ python -i src/pipeline.py
        - `.csv` and `.xlsx` files containing the retrieved data.
        - A `.pdf` file containing highlighted text passages.
 
+---
 ## First-time User
 
 ### 1. Clone the Repository
@@ -158,6 +159,37 @@ python -i src/pipeline.py
        - `.csv` and `.xlsx` files containing the retrieved data.
        - A `.pdf` file containing highlighted text passages.
 
+
+---
+
+## 🛠️ Updating Your Local Repository
+
+If you've previously cloned the repository and want to pull in the latest updates, follow these steps:
+
+1. **Navigate to the Repository Folder**  
+
+   Open your terminal (Anaconda Prompt) and change to the directory where the repository is located:
+
+   ```sh
+   cd climate-policy-miner
+   ```
+3. **Fetch and Merge the Latest Changes**
+
+   Run the following command to fetch the latest updates and merge them into your local branch:
+
+   ```sh
+   git pull origin main
+   ```
+   _Note: If your local repository has changes that conflict with the update, Git may prompt you to resolve them before proceeding._
+
+4. **Update the Conda Environment**
+
+   If the new update includes changes to the environment.yml file, update your Conda environment:
+
+   ```sh
+   conda env update -f environment.yml
+   ```
+---
 ## Demo
 
 https://github.com/user-attachments/assets/3b93bfcd-c9d5-439d-a0f7-328873f9a26f
