@@ -46,6 +46,7 @@ import fitz
 import logging
 import warnings
 import streamlit as st
+import pandas as pd
 
 from tqdm import tqdm
 from dotenv import load_dotenv
@@ -111,7 +112,7 @@ load_dotenv()
 text_model = AzureChatOpenAI(
     openai_api_version=os.environ["AZURE_OPENAI_API_VERSION"],
     azure_deployment=os.environ["AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"],
-    model_version='0613',
+    model_version='2024-07-18',
     temperature=0
 )
 
@@ -122,7 +123,7 @@ text_model = AzureChatOpenAI(
 vision_model = AzureChatOpenAI(
     openai_api_version=os.environ["AZURE_OPENAI_API_VERSION"],
     azure_deployment=os.environ["AZURE_OPENAI_CHAT_DEPLOYMENT_NAME_VISION"],
-    model_version='0613',
+    model_version='2024-07-18',
     temperature=0
 )
 
@@ -402,20 +403,30 @@ def main():
         #  targets
         targets_output_df = output_df[output_df['target']=='True']
         targets_output_df=targets_output_df[['quote', 'page', 'target_labels']]
-        targets_output_df.to_excel(f"{file_directory}/output/targets_{file_directory}.xlsx")
+        #targets_output_df.to_excel(f"{file_directory}/output/targets_{file_directory}.xlsx")
         targets_output_df.to_csv(f"{file_directory}/output/targets_{file_directory}.csv")
         
         #  mitigation
         mitigation_output_df = output_df[output_df['mitigation_measure']=='True']
         mitigation_output_df = mitigation_output_df[['quote', 'page', 'measure_labels']]
-        mitigation_output_df.to_excel(f"{file_directory}/output/mitigation_{file_directory}.xlsx")
+        #mitigation_output_df.to_excel(f"{file_directory}/output/mitigation_{file_directory}.xlsx")
         mitigation_output_df.to_csv(f"{file_directory}/output/mitigation_{file_directory}.csv")
         
         #  adaptation
         adaptation_output_df = output_df[output_df['adaptation_measure']=='True']
         adaptation_output_df = adaptation_output_df[['quote', 'page', 'measure_labels']]
-        adaptation_output_df.to_excel(f"{file_directory}/output/adaptation_{file_directory}.xlsx")
+        #adaptation_output_df.to_excel(f"{file_directory}/output/adaptation_{file_directory}.xlsx")
         adaptation_output_df.to_csv(f"{file_directory}/output/adaptation_{file_directory}.csv")
+
+        #  save to single Excel file
+        #  create an Excel writer object
+        with pd.ExcelWriter(f"{file_directory}/output/results_{file_directory}.xlsx") as writer:
+        
+            # use to_excel function and specify the sheet_name and index 
+            # to store the dataframe in specified sheet
+            targets_output_df.to_excel(writer, sheet_name="Targets", index=False)
+            mitigation_output_df.to_excel(writer, sheet_name="Mitigation", index=False)
+            adaptation_output_df.to_excel(writer, sheet_name="Adaptation", index=False)
         
         
         #  Append Link to Page for each quote
