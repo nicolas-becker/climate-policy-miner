@@ -80,7 +80,7 @@ def get_quote_extraction_Pydantic_chain(llm):
                                             template="You are a climate and transport policy analyst, specialized in Nationally Determined Contributions (NDCs). You will be provided with climate policy document snippets from NDCs. Your task is to extract quotes from these sippets. \
                                                     The quotes should define targets, measures and or actions undertaken or planned.\
                                                     If the snippet does not contain relevant information, return an empty answer. Formulate your response ONLY based on the information contained in the document snippet. \
-                                                    BEFORE responding, CHECK whether the quote reproduces the EXACT wording from the document.\
+                                                    BEFORE responding, CHECK whether the quote reproduces the EXACT wording from the document. Do NOT abbreviate the original wording. Make sure that the extracted quote can be found in this exact way in the original document snippet.\
                                                     \nHere is the NDC snippet:{Context}\n{format_instructions}",
                                             input_variables=["Context"],
                                             partial_variables={"format_instructions": pydantic_parser.get_format_instructions()},
