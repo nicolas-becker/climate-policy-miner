@@ -265,6 +265,7 @@ class AdaptationObject(BaseModel):
 
 class MitigationObject_TSI_FewShot(BaseModel):
     # MITIGATION MEASURES
+    
     # high-level category: Transport System Improvements 
     A_Complan: str = Field(description="Measure concerning any general mention of transport planning", enum=["True", "False"])
     A_Natmobplan: str = Field(description="Measure concerning National mobility plans. A national mobility plan provides a comprehensive long-term planning framework for the transport sector. It features a vision and timeframes for action at the national level. This parameter records any activities that focus on nationwide transport.", enum=["True", "False"])
@@ -287,6 +288,7 @@ class MitigationObject_TSI_FewShot(BaseModel):
 
 class MitigationObject_MSDM_FewShot(BaseModel):
     # MITIGATION MEASURES
+    
     # high-level category: Mode shift and demand management
     A_TDM: str = Field(description="Measure concerning General transport demand management. Any general mention of activities focusing on reducing demand for motorized transport.", enum=["True", "False"])
     S_Parking: str = Field(description="Measure concerning Parking. Refers to actions that aim to improve parking management such as pricing, quantity restrictions, parking reform etc. which then also contribute to a reduced demand of motorised travel.  <example>Develop park and ride infrastructure developments</example>", enum=["True", "False"])
@@ -320,6 +322,7 @@ class MitigationObject_MSDM_FewShot(BaseModel):
 
 class MitigationObject_LCF_FewShot(BaseModel):
     # MITIGATION MEASURES
+    
     # high-level category: Energy efficiency
     I_Vehicleimprove: str = Field(description="Measure concerning General vehicle improvements", enum=["True", "False"])
     I_Fuelqualimprove: str = Field(description="Measure concerning Fuel quality improvements. A high-quality fuel contains very low levels of sulfur. Countries set fuel quality standards in order to guarantee fuel quality. This category covers any mention of clean fuels or better fuel quality in the transport sector. <example> Improve the quality of gasoline and new types of alternative fuels </example>", enum=["True", "False"])
@@ -347,12 +350,14 @@ class MitigationObject_LCF_FewShot(BaseModel):
     
 class MitigationObject_EI_FewShot(BaseModel):
     # MITIGATION MEASURES
+    
     # high-level category: Electrification 
     I_Emobility: str = Field(description="Measure concerning General e-Mobility. Any general policies that refer to electric mobility without specifying a transport mode or specific measure are covered by this category. <example>simplify administrative procedures in transport electrification. </example>", enum=["True", "False"])
     I_Emobilitycharging: str = Field(description="Measure concerning Charging Infrastructure for Electric Vehicles (EVs). Electric vehicle charging infrastructure is needed to promote the adoption of electric vehicles. Measures that seek to increase the number of public charging stations or facilitate more private/public charging points are covered here. <example> A few rapid charging stations can be setup around the island powered by hydro or wind to provide the daily charging requirement, with solar PV reserved for top-up at bus stops and parking garages.</example>", enum=["True", "False"])
     I_Smartcharging: str = Field(description="Measure concerning Smart charging policies. Smart charging refers to systems that optimize electric vehicle charging by prioritizing off-peak hours or times of high variable renewable feed-in.", enum=["True", "False"])
     I_Emobilitypurchase: str = Field(description="Measure concerning Purchase incentives for Electric Vehicles (EVs). National and local governments can support the transition to e-mobility by providing financial incentives for the purchase of electric vehicles.", enum=["True", "False"])
     S_Micromobility: str = Field(description="Measure concerning General Micromobility. Micromobility refers to electric personal transportation devices, such as electric kick-scooters and other electric-powered devices, not covered under shared mobility. <example> …,creation and expansion of infrastructure for..., electric scooters, </example>", enum=["True", "False"])
+    
     # high-level category: Innovation and up-scaling 
     I_Aviation: str = Field(description="Measure concerning general Aviation improvements. Any general measures that focus on the aviation sector are referred to here. <example>Reduce aviation emissions.</example>", enum=["True", "False"])
     I_Aircraftfleet: str = Field(description="Measure concerning Aircraft fleet renovation. Newer aircraft are generally more energy efficient. This category refers to activities designed to renew the aircraft fleet or only allow newer aircraft to operate.", enum=["True", "False"])
@@ -367,22 +372,30 @@ class MitigationObject_EI_FewShot(BaseModel):
 
 class AdaptationObject_FewShot(BaseModel):
     # ADAPTATION MEASURES
+    
+    # Structural and Technical
     R_Infrares: str = Field(description="Measure concerning efforts to adapt transport infrastructure to climate change impacts CKANand to increase its resilience", enum=["True", "False"])
     R_System: str = Field(description="Measure concerning efforts to adapt transport system and infrastructure to climate change impacts and to increase its resilience", enum=["True", "False"])
     #R_Maintain: str = Field(description="Measure concerning general efforts to repair or maintain transport infrastructure, without reference to climate change adaptation.", enum=["True", "False"])
     R_Risk: str = Field(description="Measure concerning risk assessments or efforts to understand risks and impacts to the transport system (e.g. through modelling).", enum=["True", "False"])
     R_Tech: str = Field(description="Measure concerning efforts to adopt resilient transport technologies (e.g. climate resilient materials for streets or cars).", enum=["True", "False"])
+    
+    # Informational and Educational
     R_Monitoring: str = Field(description="Measure concerning efforts to adopt monitoring systems, e.g. to detect risks early on.", enum=["True", "False"])
     #R_Inform: str = Field(description="Measure concerning efforts to adopt notification systems, e.g. to inform drivers about flooding, so they can take alternate routes.", enum=["True", "False"])
-    #R_Emergency: str = Field(description="Measure concerning emergency and disaster planning that is specifically related to transport.", enum=["True", "False"])
+    R_Emergency: str = Field(description="Measure concerning emergency and disaster planning that is specifically  related to transport. This covers explicit mentions of an early warning system.", enum=["True", "False"])
     R_Education: str = Field(description="Measure concerning efforts to educate and train transport officials regarding the vulnerability of transport systems and infrastructure to climate change.", enum=["True", "False"])
-    R_Warning: str = Field(description="Measure containing explicit mention of an early warning system.", enum=["True", "False"])
+    #R_Warning: str = Field(description="Measure containing explicit mention of an early warning system.", enum=["True", "False"])
+    
+    # Institutional and Regulatory
     R_Planning: str = Field(description="Measure concerning activities designed to raise the importance of resilience and adaptation in transport planning.", enum=["True", "False"])
     R_Relocation: str = Field(description="Measure concerning efforts to relocate infrastructure or populations due to current or anticipated threats.", enum=["True", "False"])
     R_Redundancy: str = Field(description="Measure concerning construction of redundant infrastructure/facilities, to prepare for the possible failure of existing systems. <example>Diversification of transport modes with appropriate adaptive capacities.</example>", enum=["True", "False"])
     #R_Disinvest: str = Field(description="Measure concerning measures to discontinue or avoid expanding transport services or infrastructure. Abandonment or disinvestment of infrastructure", enum=["True", "False"])
     R_Laws: str = Field(description="Measure concerning laws, programmes or regulations that focus on climate change adaptation in the transport sector.", enum=["True", "False"])
     R_Design: str = Field(description="Measure concerning the adoption of improved, more resilient design standards to effectively protect or reinforce transport facilities or infrastructure.", enum=["True", "False"])
+    
+    # Other adaptation measures
     R_Other: str = Field(description="Other adaptation measures for transport not falling under the categories listed above (Structural and Technical, Informational and Educational, Institutional and Regulatory). <example>Produce a research-analysis-assessment platform on climate change risks with impact on transport infrastructure, involving insurance companies</example>", enum=["True", "False"])
 
 
