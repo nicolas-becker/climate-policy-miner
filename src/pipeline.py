@@ -69,6 +69,9 @@ from classification_utils import tagging_classifier_quotes
 from general_utils import setup_logger, normalize_filename, create_highlighted_pdf, namespace_exists
 from codecarbon import EmissionsTracker, track_emissions
 
+#%%
+from langchain_unstructured import UnstructuredLoader
+#%%
 # Set verbose
 globals.set_debug(True)
 
@@ -155,10 +158,14 @@ def main():
         
         #TODO - insert estimation of runtume and cost
         print(f'\n\n-------------------------\
-              \n\nAnalyzing "{ntpath.basename(filename)}" ...\n\nGet yourself some coffee, this might take a while.')
+              \n\nAnalyzing "{ntpath.basename(filename)}" ...\n\nGet yourself some coffee, this might take a while.\n\nCurrent estimate: 1 minute per page.\n\n-------------------------')
         
         if (preprocessing == 'n') | (preprocessing == 'no'):
             
+            language_doc = input('Is the document in English? [y/n]')
+            if language_doc.lower() not in ['y', 'yes']:
+                language_doc = input('Please specify the language of the document: ')
+
             ## STEP 1: Preprocessing
             print('\nStart Preprocessing...')
             prep_time = t.time()
