@@ -15,10 +15,22 @@ import pandas as pd
 import logging
 import unicodedata
 import numpy as np
+import json
 
 #from fuzzywuzzy import fuzz
 from tqdm import tqdm
 
+# Load configuration
+def load_config(config_file):
+    try:
+        with open(config_file, 'r') as file:
+            return json.load(file)
+    except FileNotFoundError:
+        print(f"Error: Config file '{config_file}' not found.")
+        return {}
+    except json.JSONDecodeError:
+        print(f"Error: Config file '{config_file}' is not a valid JSON.")
+        return {}
 
 def compare_quotes_fuzzy(ground_truth, matched, threshold=80):
     """
@@ -184,9 +196,6 @@ def setup_logger(name, log_file, level=logging.DEBUG):
     logger.addHandler(handler)
 
     return logger
-
-# Set logging
-logger = setup_logger(__name__, 'logfile.log')
 
 
 def is_valid_url(url):

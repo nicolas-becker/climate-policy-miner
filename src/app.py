@@ -1,24 +1,46 @@
+#%%
 import os
 import shutil
 import tempfile
 import pickle
 import logging
 import json
+import time as t
+import pandas as pd
 
 from dotenv import load_dotenv
 from flask import Flask, request, render_template, send_file, redirect, url_for
 from unstructured.staging.base import convert_to_dataframe
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings, AzureChatOpenAI, AzureOpenAIEmbeddings
+from langchain_community.callbacks import get_openai_callback
+from codecarbon import track_emissions
 
 from preprocessing_utils import set_file, unstructured_api_wo_chunking, categorize_elements, summarize_elements, summarize_text, summarize_table, summarize_image, add_documents_to_vectorstore, chunk_elements
 from retrieval_utils import get_docs_from_vectorstore
 from quotation_utils import get_quotes
 from classification_utils import tagging_classifier_quotes
-from general_utils import setup_logger, normalize_filename, create_highlighted_pdf, namespace_exists
+from general_utils import load_config, setup_logger, normalize_filename, create_highlighted_pdf, namespace_exists
+
+# Load configuration
+config_file = 'src/config.json'
+config = load_config(config_file)
+api_url = config.get('api_url', 'https://default.com/api')
+timeout = config.get('timeout', 10)
+enable_logging = config.get('enable_logging', False)
+
+# Combination of token_query and keywords
+COMBINED_QUERY =  config.get('QUERY', "transport  vehicles  emissions  BA  electric U  GH  reduction  public G  compared  scenario  transportation  reduce  CO  levels  net es  zero  fuel  vehicle  em  passenger  road  mobility  veh  target  new idad CO  Mt  car ision  transporte  rail  cars  fleet  buses  fuels  traffic  efficiency ículos ar ct e  gas  greenhouse  redu  freight  d  l  share  km o  bio  achieve os  elé els  hydrogen  urban  infrastructure  electr The  hybrid  relative  charging  neutrality eq  é ici )  least  total ado  emission  vé  standards én  aims  e  ambition ’  modes il  carbon  shift as  neutral fu  bus  EV  ré  mov  condition hic  sales  million cción  inter  año  modal  maritime  system  diesel  público  kt  network ules  alternative  cities  percent  heavy re  conditional  Transport  improvement -em  Electric RT  level  use nel  transit  roads  in  light ibles  energ  year rica  goal  aviation  per missions  long  powered  European  consumption arbon ric  lanes  vo  part  walking  sharing  rapport ación  t  bicycle  motor  stations  infra  s duction ov a To  sc  railways  cent  private ías  reductions ). ual r  achieved ada -m condition  élect  ef Transport Energy Net Zero Mitigation Adaptation Conditional Target Measure")
+
+# Chunking flag
+CHUNK = config.get('CHUNK', True)
+
+# Fewshot flag
+FEWSHOT = config.get('FEWSHOT', True)
 
 # Set logging
-logger = setup_logger(__name__, 'logfile.log')
+LOGFILE = config.get('logging', {'file':'logfile.log'}).get('file', 'logfile.log')
+logger = setup_logger(__name__, LOGFILE)
 
 # Variables from .env file
 load_dotenv()
@@ -30,8 +52,6 @@ AZURE_OPENAI_CHAT_DEPLOYMENT_NAME_VISION = os.environ["AZURE_OPENAI_CHAT_DEPLOYM
 logger.info("Loaded environment variables")
 logger.info(f"Deployment name: {AZURE_OPENAI_CHAT_DEPLOYMENT_NAME}")
 
-# Combination of token_query and keywords
-COMBINED_QUERY =  "transport  vehicles  emissions  BA  electric U  GH  reduction  public G  compared  scenario  transportation  reduce  CO  levels  net es  zero  fuel  vehicle  em  passenger  road  mobility  veh  target  new idad CO  Mt  car ision  transporte  rail  cars  fleet  buses  fuels  traffic  efficiency ículos ar ct e  gas  greenhouse  redu  freight  d  l  share  km o  bio  achieve os  elé els  hydrogen  urban  infrastructure  electr The  hybrid  relative  charging  neutrality eq  é ici )  least  total ado  emission  vé  standards én  aims  e  ambition ’  modes il  carbon  shift as  neutral fu  bus  EV  ré  mov  condition hic  sales  million cción  inter  año  modal  maritime  system  diesel  público  kt  network ules  alternative  cities  percent  heavy re  conditional  Transport  improvement -em  Electric RT  level  use nel  transit  roads  in  light ibles  energ  year rica  goal  aviation  per missions  long  powered  European  consumption arbon ric  lanes  vo  part  walking  sharing  rapport ación  t  bicycle  motor  stations  infra  s duction ov a To  sc  railways  cent  private ías  reductions ). ual r  achieved ada -m condition  élect  ef Transport Energy Net Zero Mitigation Adaptation Conditional Target Measure"
 
 # Language models
 EMBEDDINGS = AzureOpenAIEmbeddings(openai_api_key=OPENAI_API_KEY,
@@ -41,7 +61,7 @@ EMBEDDINGS = AzureOpenAIEmbeddings(openai_api_key=OPENAI_API_KEY,
 TEXT_MODEL = AzureChatOpenAI(
     openai_api_version=AZURE_OPENAI_API_VERSION,
     azure_deployment=AZURE_OPENAI_CHAT_DEPLOYMENT_NAME,
-    model_version='0613',
+    model_version='2024-07-18',
     temperature=0
 )
 logger.info(f"Text model: {TEXT_MODEL.model_name}")	
@@ -54,6 +74,11 @@ VISION_MODEL = AzureChatOpenAI(
     temperature=0
 )
 logger.info(f"Text model: {VISION_MODEL.model_name}")	
+
+
+print('model name:', TEXT_MODEL.model_name, os.environ["AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"])
+#%% 
+
 
 # Directories for uploads and results
 UPLOAD_FOLDER = 'uploads'
@@ -143,29 +168,85 @@ def clear_files():
     os.makedirs(RESULT_FOLDER, exist_ok=True)
     return redirect(url_for('home'))
 
-
+@track_emissions
 def process_file(uploaded_file_path):
     """
     TODO --> to be migrated to pipeline_module.py 
-    Simulate file analysis.
+
     Generates a folder with results for download.
     """
-    # Step 0: Create a unique result folder for the results and extract filename
-    filename, file_directory = step_0_create_folder(uploaded_file_path)
+    logger.info("\n\n========================= Start Pipeline =========================\n")
+    total_time = t.time()
+    total_cost = 0
+    total_tokens = 0
 
-    # Step 1: Preprocess the input file and set up a vector store
-    elements_chunked, namespace, vectorstore = step_1_preprocess(uploaded_file_path, filename, file_directory)
+    try:
+        # Step 0: Create a unique result folder for the results and extract filename
+        filename, file_directory = step_0_create_folder(uploaded_file_path)
+        logger.info(f"Step 0 took {t.time() - total_time} seconds.")
 
-    # Step 2: Retrieve documents from the vector store
-    retrieved_elements = step_2_retrieve(elements_chunked, namespace, vectorstore, file_directory)
+        # Step 1: Preprocess the input file and set up a vector store
+        step_time = t.time()
+        with get_openai_callback() as cb:    
+            elements_chunked, namespace, vectorstore = step_1_preprocess(uploaded_file_path, filename, file_directory)
+            logger.info(f"Preprocessing Cost (USD): ${format(cb.total_cost, '.6f')}")
+            logger.info(f"Preprocessing Tokens: {cb.total_tokens}")
+            total_cost = total_cost + cb.total_cost
+            total_tokens = total_tokens + cb.total_tokens
+        logger.info(f"Preprocessing took {t.time() - step_time} seconds.")
+
+        # Step 2: Retrieve elements from the vector store
+        step_time = t.time()
+        with get_openai_callback() as cb:
+            retrieved_elements = step_2_retrieve(elements_chunked, namespace, vectorstore, file_directory)
+            logger.info(f"Retrieval Cost (USD): ${format(cb.total_cost, '.6f')}")
+            logger.info(f"Retrieval Tokens: {cb.total_tokens}")
+            total_cost = total_cost + cb.total_cost
+            total_tokens = total_tokens + cb.total_tokens
+        logger.info(f"Retrieval took {t.time() - step_time} seconds.")
+
+        # Step 3: Extract quotes from the retrieved elements
+        step_time = t.time()
+        with get_openai_callback() as cb:
+            quotes_dict = step_3_extract_quotes(retrieved_elements, file_directory, namespace)
+            logger.info(f"Quote Extraction Cost (USD): ${format(cb.total_cost, '.6f')}")
+            logger.info(f"Quote Extraction Tokens: {cb.total_tokens}")
+            total_cost = total_cost + cb.total_cost
+            total_tokens = total_tokens + cb.total_tokens
+        logger.info(f"Quotation took {t.time() - step_time} seconds.")
+
+        # Step 4: Classify the extracted quotes
+        step_time = t.time()
+        with get_openai_callback() as cb:
+            output_df = step_4_classify_quotes(quotes_dict, file_directory, namespace)
+            logger.info(f"Classification Cost (USD): ${format(cb.total_cost, '.6f')}")
+            logger.info(f"Classification Tokens: {cb.total_tokens}")
+            total_cost = total_cost + cb.total_cost
+            total_tokens = total_tokens + cb.total_tokens
+        logger.info(f"Classification took {t.time() - step_time} seconds.")
+
+        # Post-process the results
+        step_time = t.time()
+        mitigation_output_df, adaptation_output_df = postprocess_results(uploaded_file_path, output_df, file_directory, namespace)
+        logger.info(f"Post-processing took {t.time() - step_time} seconds.")
+
+        additional_file = os.path.join(file_directory, 'summary.txt')
+        with open(additional_file, 'w') as summary:
+            summary.write(f"filename: {filename}\n")
+            summary.write(f"file_directory: {file_directory}\n")
+            summary.write(f"namespace: {namespace}\n")
+            summary.write(f"vectorstore: {vectorstore}\n")
+        
     
-    # test Output
-    additional_file = os.path.join(file_directory, 'summary.txt')
-    with open(additional_file, 'w') as summary:
-        summary.write(f"filename: {filename}\n")
-        summary.write(f"file_directory: {file_directory}\n")
-        summary.write(f"namespace: {namespace}\n")
-        summary.write(f"vectorstore: {vectorstore}\n")
+    except Exception as e:
+        logging.exception(f"Pipeline exit with an error: {e}")
+        
+    finally:
+        total_time = t.time() - total_time
+        logger.info(f"Pipeline took {total_time} seconds.")
+        logger.info(f"Total Cost (USD): ${format(total_cost, '.6f')}")
+        logger.info(f"Total Tokens: {total_tokens}")
+        logger.info("\n\n========================= End Pipeline =========================\n")
     
     return file_directory
 
@@ -229,10 +310,11 @@ def step_1_preprocess(input_file, filename, file_directory):
     elements_df.to_csv(f"{file_directory}/by-products/partition_wo-chunking_{filename}.csv")
     
     try:
-        elements_chunked = chunk_elements(elements)
-        logging.debug("Elements chunked successfully")
+        if CHUNK:
+            elements = chunk_elements(elements)
+            logging.debug("Elements chunked successfully")
 
-        table_elements, image_elements, text_elements = categorize_elements(elements_chunked)
+        table_elements, image_elements, text_elements = categorize_elements(elements)
         logging.debug("Elements categorized successfully")
 
         texts = [i.text for i in text_elements]
@@ -255,7 +337,7 @@ def step_1_preprocess(input_file, filename, file_directory):
         add_documents_to_vectorstore(vectorstore, tables, table_elements)
         logging.debug("Table summaries added successfully")
 
-        return elements_chunked, namespace, vectorstore
+        return elements, namespace, vectorstore
 
     except OSError as e:
         logging.error(f"OSError encountered: {e}")
@@ -327,5 +409,89 @@ def step_3_extract_quotes(retrieved_elements, file_directory, namespace):
         logging.error(f"OSError encountered: {e}")
         raise
 
+def step_4_classify_quotes(quotes_dict, file_directory, namespace):
+    """
+    Step 4 of the Pipeline:
+    -----------------------
+    This function classifies the extracted quotes into predefined categories.
+    
+    Params:
+        quotes_dict (dict): A dictionary containing the previously extracted quotes.
+        file_directory (str): The path to the directory containing the input data and the result folder.
+        namespace (str): A namespace identifier used for the vector store.
+    Returns:
+        pd.DataFrame : A pandas DF containing the classified quotes.
+    """
+    try:
+        # Classification of quotes into predefined categories
+        classified_quotes = tagging_classifier_quotes(quotes_dict=quotes_dict, llm=TEXT_MODEL, fewshot=FEWSHOT)
+        logging.debug("Quotes classified successfully")
+
+        #  Persist results in Excel and CSV{TEXT_MODEL.model_name}_{namespace}
+        classified_quotes.to_excel(f"{file_directory}/by-products/zero-shot-tagging_{TEXT_MODEL.model_name}_{namespace}.xlsx")
+        classified_quotes.to_csv(f"{file_directory}/by-products/zero-shot-tagging_{TEXT_MODEL.model_name}_{namespace}.csv")
+        
+        return classified_quotes
+
+    except OSError as e:
+        logging.error(f"OSError encountered: {e}")
+        raise
+
+def postprocess_results(filename, output_df, file_directory, namespace):
+    """
+    Post-processing of Results:
+    -----------------------
+    This function performs several postprocessing steps on the output DataFrame from the pipeline.
+    It generates highlighted PDFs, and saves specific subsets of the data (targets, mitigation measures, 
+    and adaptation measures) to both Excel and CSV files.
+
+    Params:
+        output_df (pd.DataFrame): The DataFrame containing the results of the pipeline.
+        file_directory (str): The directory where the output files will be saved.
+        namespace (str): A namespace string used to differentiate the output files.
+    Returns:
+        targets_output_df (pd.DataFrame): DataFrame containing the filtered targets data.
+        mitigation_output_df (pd.DataFrame): DataFrame containing the filtered mitigation measures data.
+        adaptation_output_df (pd.DataFrame): DataFrame containing the filtered adaptation measures data.
+    """
+
+    # highlight quotes
+    create_highlighted_pdf(filename, 
+                            quotes=output_df['quote'],
+                            output_path=f"{file_directory}/output/highlighted_{namespace}.pdf",
+                            df = output_df
+                            )
+
+    #  targets
+    targets_output_df = output_df[output_df['target']=='True']
+    targets_output_df=targets_output_df[['quote', 'page', 'target_labels']]
+    #targets_output_df.to_excel(f"{file_directory}/output/targets_{namespace}.xlsx")
+    targets_output_df.to_csv(f"{file_directory}/output/targets_{namespace}.csv")
+    
+    #  mitigation
+    mitigation_output_df = output_df[output_df['mitigation_measure']=='True']
+    mitigation_output_df = mitigation_output_df[['quote', 'page', 'measure_labels']]
+    #mitigation_output_df.to_excel(f"{file_directory}/output/mitigation_{namespace}.xlsx")
+    mitigation_output_df.to_csv(f"{file_directory}/output/mitigation_{namespace}.csv")
+    
+    #  adaptation
+    adaptation_output_df = output_df[output_df['adaptation_measure']=='True']
+    adaptation_output_df = adaptation_output_df[['quote', 'page', 'measure_labels']]
+    #adaptation_output_df.to_excel(f"{file_directory}/output/adaptation_{namespace}.xlsx")
+    adaptation_output_df.to_csv(f"{file_directory}/output/adaptation_{namespace}.csv")
+
+    #  save to single Excel file
+    #  create an Excel writer object
+    with pd.ExcelWriter(f"{file_directory}/output/results_{namespace}.xlsx") as writer:
+    
+        # use to_excel function and specify the sheet_name and index 
+        # to store the dataframe in specified sheet
+        targets_output_df.to_excel(writer, sheet_name="Targets", index=False)
+        mitigation_output_df.to_excel(writer, sheet_name="Mitigation", index=False)
+        adaptation_output_df.to_excel(writer, sheet_name="Adaptation", index=False)
+
+    return targets_output_df, mitigation_output_df, adaptation_output_df
+
 if __name__ == '__main__':
+    logger.info("\n\n========================= Start App =========================\n")
     app.run(debug=True)

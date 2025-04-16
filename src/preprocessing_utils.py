@@ -188,6 +188,7 @@ def unstructured_api_wo_chunking(file):
         api_key=os.environ["UNSTRUCTURED_API_KEY"], 
         strategy="hi_res", 
         coordinates = "true",  # return bounding box coordinates for each element extracted via OCR
+        languages = ['jpn'], # language detection
         pdf_infer_table_structure="true",
         extract_image_block_types=["Image", "Table"] # The types of elements to extract, for use in extracting image blocks as base64 encoded data stored in metadata fields
      #   unique_element_ids=True #assign UUIDs to element IDs, which guarantees their uniqueness (useful when using them as primary keys in database). Otherwise a SHA-256 of element text is used.     
