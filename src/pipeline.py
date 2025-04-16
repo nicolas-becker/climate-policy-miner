@@ -172,7 +172,7 @@ def main():
                 logger.info(f'Partitioning took {s} sec.')
                 
                 #  OPTIONAL: persist/save results as pickle
-                with open(f"{file_directory}/by-products/partition_{file_directory}.pkl", 'wb') as f:
+                with open(f"docs/{file_directory}/by-products/partition_{file_directory}.pkl", 'wb') as f:
                     pickle.dump(elements, f)
                 
                 """
@@ -185,8 +185,8 @@ def main():
                 
                 #  Persist partition in Excel and CSV
                 elements_df = convert_to_dataframe(elements)
-                elements_df.to_excel(f"{file_directory}/by-products/partition_wo-chunking_{file_directory}.xlsx")
-                elements_df.to_csv(f"{file_directory}/by-products/partition_wo-chunking_{file_directory}.csv")
+                elements_df.to_excel(f"docs/{file_directory}/by-products/partition_wo-chunking_{file_directory}.xlsx")
+                elements_df.to_csv(f"docs/{file_directory}/by-products/partition_wo-chunking_{file_directory}.csv")
                     
                 #  Chunk elements
                 elements_chunked = chunk_elements(elements)
@@ -217,9 +217,9 @@ def main():
                 logger.info(f"Summarization of table elements Tokens: {cb.total_tokens}")
                 
                 #  Persist summaries
-                with open(f"{file_directory}/text_summaries_{file_directory}.pkl", 'wb') as f:
+                with open(f"docs/{file_directory}/text_summaries_{file_directory}.pkl", 'wb') as f:
                     pickle.dump(text_summaries, f)
-                with open(f"{file_directory}/table_summaries_{file_directory}.pkl", 'wb') as f:
+                with open(f"docs/{file_directory}/table_summaries_{file_directory}.pkl", 'wb') as f:
                     pickle.dump(table_summaries, f)   
                 """
                 """
@@ -229,16 +229,16 @@ def main():
                 #  Postprocess Results to Element Objects and split by Element type
                 table_elements, image_elements, text_elements = categorize_elements(elements_chunked)
                 #  Load summaries
-                with open(f"{file_directory/by-products}/text_summaries_{file_directory}.pkl", 'rb') as f:
+                with open(f"docs/{file_directory}/by-products/text_summaries_{file_directory}.pkl", 'rb') as f:
                     text_summaries=pickle.load(f)
-                with open(f"{file_directory/by-products}/table_summaries_{file_directory}.pkl", 'rb') as f:
+                with open(f"docs/{file_directory}/by-products/table_summaries_{file_directory}.pkl", 'rb') as f:
                     table_summaries=pickle.load(f)
                 ###############################################                
                 """
                 #  Set up vector store with namespace dedicated to current document
                 #  https://app.pinecone.io/organizations/-Nux-qonUJ0fgF6B5oAb/projects/85bf2d16-08d0-412f-96e7-bed39cd531bf/indexes/ndc-summaries/namespaces
                 # TODO: check if already exists and delete existing entries first
-                namespace = normalize_filename(f"{file_directory}_chunked_orig-text") # check if namespace is ASCII-printable
+                namespace = normalize_filename(f"docs/{file_directory}_chunked_orig-text") # check if namespace is ASCII-printable
                 vectorstore = PineconeVectorStore(index_name=index_name, embedding=embeddings, namespace=namespace)
                 #  drop existing vectors for the docuemnt to avoid duplicates
                 index = vectorstore.get_pinecone_index(index_name)
@@ -275,7 +275,7 @@ def main():
                     print(f'\n\nSummarization of imagees took {s} sec.')
                     
                     #  persist image summaries
-                    with open(f"{file_directory}/by-products/image_summaries_{file_directory}.pkl", 'wb') as f:
+                    with open(f"docs/{file_directory}/by-products/image_summaries_{file_directory}.pkl", 'wb') as f:
                         pickle.dump(image_summaries, f)
                     
                     #  Add image summaries to vector store
@@ -298,16 +298,16 @@ def main():
         vectorstore = PineconeVectorStore.from_existing_index(index_name=index_name, embedding=embeddings, namespace=namespace)
         
         #  Load elements from pickle
-        with open(f"{file_directory}/by-products/partition_{file_directory}.pkl", 'rb') as f:
+        with open(f"docs/{file_directory}/by-products/partition_{file_directory}.pkl", 'rb') as f:
             elements=pickle.load(f)
         #  Chunk elements
         elements_chunked = chunk_elements(elements)
         #  Postprocess Results to Element Objects and split by Element type
 #        table_elements, image_elements, text_elements = categorize_elements(elements_chunked)
         #  Load summaries
-#            with open(f"{file_directory}/by-products/text_summaries_{file_directory}.pkl", 'rb') as f:
+#            with open(f"docs/{file_directory}/by-products/text_summaries_{file_directory}.pkl", 'rb') as f:
 #                text_summaries=pickle.load(f)
-#            with open(f"{file_directory}/by-products/table_summaries_{file_directory}.pkl", 'rb') as f:
+#            with open(f"docs/{file_directory}/by-products/table_summaries_{file_directory}.pkl", 'rb') as f:
 #                table_summaries=pickle.load(f)
         ###################################################            
         
@@ -326,7 +326,7 @@ def main():
             rel_docs = get_docs_from_vectorstore(vectorstore=vectorstore, index_name=index_name, namespace=namespace, query=combined_query, embedding=embeddings, k=k_static, score_threshold=sim_threshold)
 
             #  Persist results in JSON Object
-            with open(f"{file_directory}/by-products/retrieved_documents_{file_directory}.json", 'w') as f:
+            with open(f"docs/{file_directory}/by-products/retrieved_documents_{file_directory}.json", 'w') as f:
                 json.dump(rel_docs, f)
                 
             print(f"Document Retrieval Cost (USD): ${format(cb.total_cost, '.6f')}")
@@ -345,7 +345,7 @@ def main():
             quotes_dict = get_quotes(text_model, rel_docs)
             
             #  Persist results in JSON Object
-            with open(f"{file_directory}/by-products/extracted_quotes_{text_model.model_name}_{file_directory}.json", 'w') as f:
+            with open(f"docs/{file_directory}/by-products/extracted_quotes_{text_model.model_name}_{file_directory}.json", 'w') as f:
                 json.dump(quotes_dict, f)
         
             print(f"Quote Extraction Cost (USD): ${format(cb.total_cost, '.6f')}")
@@ -359,7 +359,7 @@ def main():
         
         """
         ################### CHECKPOINT ####################
-        with open(f"{file_directory}/by-products/extracted_quotes_{text_model.model_name}_{file_directory}.json", 'r') as f:
+        with open(f"docs/{file_directory}/by-products/extracted_quotes_{text_model.model_name}_{file_directory}.json", 'r') as f:
             quotes_dict = json.load(f)
         ###################################################
         """
@@ -382,8 +382,8 @@ def main():
             print(f"\n\nClassification took {t.time()-start_time} sec.")
             
             #  Persist results in Excel and CSV
-            output_df.to_excel(f"{file_directory}/by-products/zero-shot-tagging_{text_model.model_name}_{file_directory}.xlsx")
-            output_df.to_csv(f"{file_directory}/by-products/zero-shot-tagging_{text_model.model_name}_{file_directory}.csv")
+            output_df.to_excel(f"docs/{file_directory}/by-products/zero-shot-tagging_{text_model.model_name}_{file_directory}.xlsx")
+            output_df.to_csv(f"docs/{file_directory}/by-products/zero-shot-tagging_{text_model.model_name}_{file_directory}.csv")
             
             print(f"Classification Cost (USD): ${format(cb.total_cost, '.6f')}")
             logger.info(f"Classification Cost (USD): ${format(cb.total_cost, '.6f')}")
@@ -397,30 +397,30 @@ def main():
         #  highlight quotes
         create_highlighted_pdf(filename, 
                             quotes=output_df['quote'],
-                            output_path=f"{file_directory}/output/highlighted_{ntpath.basename(filename)}",
+                            output_path=f"docs/{file_directory}/output/highlighted_{ntpath.basename(filename)}",
                             df = output_df)
         
         #  targets
         targets_output_df = output_df[output_df['target']=='True']
         targets_output_df=targets_output_df[['quote', 'page', 'target_labels']]
-        #targets_output_df.to_excel(f"{file_directory}/output/targets_{file_directory}.xlsx")
-        targets_output_df.to_csv(f"{file_directory}/output/targets_{file_directory}.csv")
+        #targets_output_df.to_excel(f"docs/{file_directory}/output/targets_{file_directory}.xlsx")
+        targets_output_df.to_csv(f"docs/{file_directory}/output/targets_{file_directory}.csv")
         
         #  mitigation
         mitigation_output_df = output_df[output_df['mitigation_measure']=='True']
         mitigation_output_df = mitigation_output_df[['quote', 'page', 'measure_labels']]
-        #mitigation_output_df.to_excel(f"{file_directory}/output/mitigation_{file_directory}.xlsx")
-        mitigation_output_df.to_csv(f"{file_directory}/output/mitigation_{file_directory}.csv")
+        #mitigation_output_df.to_excel(f"docs/{file_directory}/output/mitigation_{file_directory}.xlsx")
+        mitigation_output_df.to_csv(f"docs/{file_directory}/output/mitigation_{file_directory}.csv")
         
         #  adaptation
         adaptation_output_df = output_df[output_df['adaptation_measure']=='True']
         adaptation_output_df = adaptation_output_df[['quote', 'page', 'measure_labels']]
-        #adaptation_output_df.to_excel(f"{file_directory}/output/adaptation_{file_directory}.xlsx")
-        adaptation_output_df.to_csv(f"{file_directory}/output/adaptation_{file_directory}.csv")
+        #adaptation_output_df.to_excel(f"docs/{file_directory}/output/adaptation_{file_directory}.xlsx")
+        adaptation_output_df.to_csv(f"docs/{file_directory}/output/adaptation_{file_directory}.csv")
 
         #  save to single Excel file
         #  create an Excel writer object
-        with pd.ExcelWriter(f"{file_directory}/output/results_{file_directory}.xlsx") as writer:
+        with pd.ExcelWriter(f"docs/{file_directory}/output/results_{file_directory}.xlsx") as writer:
         
             # use to_excel function and specify the sheet_name and index 
             # to store the dataframe in specified sheet
@@ -445,7 +445,7 @@ def main():
         print(f"\n\nTotal Cost (USD): ${format(total_cost, '.6f')}")
         logger.info(f"Total Cost (USD): ${format(total_cost, '.6f')}")
         logger.info(f"Total Tokens: {total_tokens}")
-        print(f"\n\nResults can be found in the folder: '{file_directory}'")
+        print(f"\n\nResults can be found in the folder: 'docs/{file_directory}'")
     
     
 if __name__ == "__main__":

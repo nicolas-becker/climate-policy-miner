@@ -113,12 +113,12 @@ def set_file(streamlit = False):
             filename = handle_url(filename)
             
             # creating image file for document
-            if not os.path.exists(f'{os.path.splitext(ntpath.basename(filename))[0]}'):
+            if not os.path.exists(f'docs/{os.path.splitext(ntpath.basename(filename))[0]}'):
                 print('\n\nCreating folder...')
-                os.makedirs(f'{os.path.splitext(ntpath.basename(filename))[0]}')
-                os.makedirs(f'{os.path.splitext(ntpath.basename(filename))[0]}/by-products/')
-                os.makedirs(f'{os.path.splitext(ntpath.basename(filename))[0]}/by-products/figures/')
-                os.makedirs(f'{os.path.splitext(ntpath.basename(filename))[0]}/output/')
+                os.makedirs(f'docs/{os.path.splitext(ntpath.basename(filename))[0]}')
+                os.makedirs(f'docs/{os.path.splitext(ntpath.basename(filename))[0]}/by-products/')
+                os.makedirs(f'docs/{os.path.splitext(ntpath.basename(filename))[0]}/by-products/figures/')
+                os.makedirs(f'docs/{os.path.splitext(ntpath.basename(filename))[0]}/output/')
             
             print('\nDocument folder exists or was created.\n')
     
@@ -126,12 +126,12 @@ def set_file(streamlit = False):
         elif os.path.exists(filename):
             
             # creating image file for document
-            if not os.path.exists(f'{os.path.splitext(ntpath.basename(filename))[0]}'):
+            if not os.path.exists(f'docs/{os.path.splitext(ntpath.basename(filename))[0]}'):
                 print('\n\nCreating folder...')
-                os.makedirs(f'{os.path.splitext(ntpath.basename(filename))[0]}')
-                os.makedirs(f'{os.path.splitext(ntpath.basename(filename))[0]}/by-products/')
-                os.makedirs(f'{os.path.splitext(ntpath.basename(filename))[0]}/by-products/figures/')
-                os.makedirs(f'{os.path.splitext(ntpath.basename(filename))[0]}/output/')
+                os.makedirs(f'docs/{os.path.splitext(ntpath.basename(filename))[0]}')
+                os.makedirs(f'docs/{os.path.splitext(ntpath.basename(filename))[0]}/by-products/')
+                os.makedirs(f'docs/{os.path.splitext(ntpath.basename(filename))[0]}/by-products/figures/')
+                os.makedirs(f'docs/{os.path.splitext(ntpath.basename(filename))[0]}/output/')
             
             print('\nDocument folder exists or was created.\n')
             
