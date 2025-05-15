@@ -11,22 +11,23 @@ Key Features:
 
 '''
 
-from flask import Flask, request, render_template, send_file, redirect, url_for
+from flask import Flask, request, render_template, send_file, redirect, url_for, jsonify
 import fitz  # PyMuPDF
 import os
 import tempfile
 import json
 import pandas as pd
+import uuid
+import threading
 from werkzeug.utils import secure_filename
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
 from langchain.schema import HumanMessage
 from langchain_community.vectorstores import FAISS # https://python.langchain.com/docs/integrations/vectorstores/faiss/
 from langchain.docstore.document import Document
-import openai
 from langchain_community.callbacks import get_openai_callback
 import json
 from unstructured.partition.pdf import partition_pdf
-import shutil
+from unstructured.chunking.title import chunk_by_title
 from zipfile import ZipFile
 import io
 from langchain_community.vectorstores import Chroma
@@ -35,10 +36,15 @@ from langchain_community.vectorstores.utils import filter_complex_metadata
 from quotation_utils import get_quotes
 from classification_utils import tagging_classifier_quotes
 from general_utils import create_highlighted_pdf
+import traceback
+import sys
 
 # Initialize Flask application
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir() # Temporary folder for file uploads
+
+# Store for tracking processing tasks
+processing_tasks = {}
 
 # Environment variable setup for LangChain tracing
 # Uncomment the following lines to enable tracing with LangChain (requires valid API key)
@@ -75,12 +81,14 @@ TAXONOMY = ["Transport",
             "Measure"
             ]
 
-def extract_text_with_unstructured(pdf_path):
+def extract_text_with_unstructured(pdf_path, min_lenght=10, max_length=10000):
     """
     Extracts text and metadata from a PDF file using the `partition_pdf` function.
 
     Args:
         pdf_path (str): The file path to the PDF document to be processed.
+        min_lenght (int): The minimum length of elements, up to which they are always chunked, to reduce processing time.
+        max_length (int): The maximum length of chunks to be extracted from each element. Larger chunks are split into smaller ones.
 
     Returns:
         list: A list of dictionaries, where each dictionary contains:
@@ -96,6 +104,12 @@ def extract_text_with_unstructured(pdf_path):
                             languages=['eng','jpn'],  # language detection
                             #extract_image_block_types=["Image", "Table"],  # The types of elements to extract, for use in extracting image blocks as base64 encoded data stored in metadata fields
                             )
+    elements = chunk_by_title(elements=elements,
+                                      multipage_sections = True, # Default
+                                      combine_text_under_n_chars = min_lenght, # Specifying 0 for this argument suppresses combining of small chunks
+                                      new_after_n_chars = max_length, # Specifying 0 for this argument causes each element to appear in a chunk by itself (although an element with text longer than max_characters will be still be split into two or more chunks)
+                                      max_characters = max_length # Cut off new sections after reaching a length of n chars (hard max). Default: 500
+                                      )
 
     content = []
     for el in elements:
@@ -423,10 +437,73 @@ def create_results_zip():
     memory_file.seek(0)
     return memory_file
 
+def process_document(task_id, file_path, query_terms, filename):
+    """
+    Process a document in the background and update progress.
+    
+    Args:
+        task_id (str): Unique ID for this processing task
+        file_path (str): Path to the PDF file
+        query_terms (list): Terms to search for
+        filename (str): Original filename
+    """
+    try:
+        # Initialize progress tracking
+        processing_tasks[task_id] = {
+            "progress": 0,
+            "status": "Starting document analysis...",
+            "result": None,
+            "error": None,
+            "traceback": None,
+            "original_filename": filename  # Store the original filename
+        }
+        
+        # Step 1: Extract text with Unstructured (20%)
+        processing_tasks[task_id]["status"] = "Extracting text from document..."
+        unstructured_text = extract_text_with_unstructured(file_path)
+        processing_tasks[task_id]["progress"] = 20
+        
+        # Step 2: Perform semantic search (40%)
+        processing_tasks[task_id]["status"] = "Performing semantic search..."
+        chunks = semantic_search_FAISS(unstructured_text, query_terms, 
+                                      os.path.splitext(os.path.basename(file_path))[0])
+        processing_tasks[task_id]["progress"] = 40
+        
+        # Step 3: Extract quotes (60%)
+        processing_tasks[task_id]["status"] = "Extracting quotes from relevant sections..."
+        citations = extract_quotes(chunks, os.path.basename(file_path))
+        processing_tasks[task_id]["progress"] = 60
+        
+        # Step 4: Classify quotes (80%)
+        processing_tasks[task_id]["status"] = "Classifying extracted quotes..."
+        classified = classify_quotes(citations, file_path)
+        processing_tasks[task_id]["progress"] = 80
+        
+        # Step 5: Post-process results (100%)
+        processing_tasks[task_id]["status"] = "Finalizing results..."
+        postprocess_results(file_path, classified, filename)
+        processing_tasks[task_id]["progress"] = 100
+        
+        # Store results for retrieval
+        processing_tasks[task_id]["status"] = "Analysis complete"
+        processing_tasks[task_id]["result"] = citations
+        
+    except Exception as e:
+        # Capture the full traceback
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        error_traceback = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        
+        # Handle any errors with detailed information
+        processing_tasks[task_id]["error"] = str(e)
+        processing_tasks[task_id]["traceback"] = error_traceback
+        processing_tasks[task_id]["status"] = f"Error: {str(e)}"
+        print(f"Error processing document: {str(e)}")
+        print(f"Traceback: {error_traceback}")
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     """
-    TODO: add highlighting, classification
+    Home route that handles file uploads and initiates document processing
     """
     if request.method == 'POST':
         file = request.files['pdf_file']
@@ -438,44 +515,91 @@ def index():
             query_terms = DEFAULT_QUERY
 
         if file:
+            # Generate a unique task ID
+            task_id = str(uuid.uuid4())
+            
             filename = secure_filename(file.filename)
             by_products_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'by-products')
             os.makedirs(by_products_folder, exist_ok=True)  # Ensure the subfolder exists
             file_path = os.path.join(by_products_folder, filename)
             file.save(file_path)
 
-            #citations, highlighted_path = extract_text_and_highlight(file_path, query_terms)
-            citations = extract_text_and_highlight(file_path, query_terms)
-
-            classified = classify_quotes(citations, file_path)
-
-            postprocess_results(file_path, classified, filename)
-
-            return render_template(
-                'results.html',
-                #citations=classified,
-                citations=citations,
-                #highlighted_pdf=os.path.basename(highlighted_path),
-                results_folder='results'
-            )
-        
+            # Start processing in a background thread
+            thread = threading.Thread(target=process_document, 
+                                    args=(task_id, file_path, query_terms, filename))
+            thread.daemon = True
+            thread.start()
+            
+            # Redirect to progress page
+            return render_template('progress.html', task_id=task_id)
+            
     return render_template('index.html')
 
-@app.route('/download/<filename>')
-#deprecated: using download_results instead
-def download_file(filename):
-    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    return send_file(file_path, as_attachment=True)
+@app.route('/results/<task_id>')
+def results(task_id):
+    """
+    Display results when processing is complete
+    """
+    if task_id in processing_tasks and processing_tasks[task_id]["result"] is not None:
+        citations = processing_tasks[task_id]["result"]
+        original_filename = processing_tasks[task_id].get("original_filename", "analysis")
+        return render_template(
+            'results.html',
+            citations=citations,
+            results_folder='results',
+            task_id=task_id,
+            original_filename=original_filename
+        )
+    else:
+        # If task doesn't exist or isn't complete, redirect to progress
+        return render_template('progress.html', task_id=task_id)
 
-@app.route('/download_results')
+@app.route('/api/progress/<task_id>')
+def progress(task_id):
+    """
+    API endpoint to retrieve task progress
+    """
+    if task_id in processing_tasks:
+        task = processing_tasks[task_id]
+        response = {
+            "progress": task["progress"],
+            "status": task["status"],
+        }
+        
+        # If processing is complete, include redirect URL
+        if task["progress"] == 100 and task["error"] is None:
+            response["redirect"] = url_for('results', task_id=task_id)
+        
+        # If there was an error, include it and the traceback
+        if task["error"] is not None:
+            response["error"] = task["error"]
+            response["traceback"] = task["traceback"]
+            
+        return jsonify(response)
+    else:
+        return jsonify({"error": "Task not found"}), 404
+
+
+@app.route('/download')
 def download_results():
     """
     Route to download the entire results folder as a zip file
+    with a filename based on the original document
     """
+    # Get the task_id and original filename from query parameters
+    task_id = request.args.get('task_id', '')
+    original_filename = request.args.get('filename', 'analysis')
+    
+    # Create zip file
     memory_file = create_results_zip()
+    
+    # Use the original filename (without extension) for the download
+    base_filename = os.path.splitext(original_filename)[0]
+    download_name = f'{base_filename}_analysis.zip'
+    
     return send_file(
         memory_file,
-        download_name='analysis_results.zip',
+        download_name=download_name,
         as_attachment=True,
         mimetype='application/zip'
     )

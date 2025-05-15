@@ -27,7 +27,7 @@
 </head>
 <body class="bg-light">
   <div class="container py-5">
-    <h1 class="mb-4 text-center">🔍 Extracted Citations & Quotes</h1>
+    <h1 class="mb-4 text-center">🔍 Extracted Content & Quotes</h1>
 
     {% if citations %}
       <!-- Main Citations Accordion -->
@@ -86,7 +86,7 @@
 
     <div class="mt-4 d-flex justify-content-between">
       <a href="{{ url_for('index') }}" class="btn btn-secondary">🔄 Analyze Another Document</a>
-      <a href="{{ url_for('download_results') }}" class="btn btn-primary">📥 Download Results</a>
+      <a href="{{ url_for('download_results', task_id=task_id, filename=original_filename) }}" class="btn btn-primary">📥 Download Results</a>
     </div>
   </div>
 
