@@ -142,7 +142,7 @@ class TargetObject(BaseModel):
 
 class MeasureTypeObject(BaseModel):
     # type
-    mitigation_measure: str = Field(description="In an NDC, a 'mitigation' measure is defined as an action that is planned to be undertaken to mitigate the effects of cliamte change, such as transport system improvements, low-carbon fuels, mode shift and demand management. Does the text refer to a mitigation measure in the transport sector?", enum=["True", "False"])
+    mitigation_measure: str = Field(description="In an NDC, a 'mitigation' measure is defined as an action that is planned to be undertaken to mitigate the effects of climate change, such as transport system improvements, low-carbon fuels, mode shift and demand management. Does the text refer to a mitigation measure in the transport sector?", enum=["True", "False"])
     adaptation_measure: str = Field(description="In an NDC, an 'adaptation' measure is defined as an action that is planned to be undertaken to adapt to the effects of climate change, such as the investment in resilient infrastructure, information management and regulatory planning. Does the text refer to an adaptation measure in the transport sector?", enum=["True", "False"])
 
 class MitigationObject_TSI(BaseModel):
