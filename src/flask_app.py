@@ -19,12 +19,16 @@ import json
 import pandas as pd
 import uuid
 import threading
+import logging
+import time
+import random
 from werkzeug.utils import secure_filename
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
 from langchain.schema import HumanMessage
 from langchain_community.vectorstores import FAISS # https://python.langchain.com/docs/integrations/vectorstores/faiss/
 from langchain.docstore.document import Document
 from langchain_community.callbacks import get_openai_callback
+from openai import InternalServerError
 import json
 from unstructured.partition.pdf import partition_pdf
 from unstructured.chunking.title import chunk_by_title
@@ -42,6 +46,21 @@ import sys
 # Initialize Flask application
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir() # Temporary folder for file uploads
+
+# Set up logging
+log_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'logs')
+os.makedirs(log_folder, exist_ok=True)  # Ensure the logs folder exists
+log_file = os.path.join(log_folder, 'app.log')
+
+logging.basicConfig(
+    filename=log_file,
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+# Log the start of the application
+logging.info("============" \
+             "App started." \
+             "============")
 
 # Store for tracking processing tasks
 processing_tasks = {}
@@ -128,7 +147,7 @@ def extract_text_with_unstructured(pdf_path, min_lenght=10, max_length=10000):
     
     return content
 
-def semantic_search_FAISS(text_chunks, queries, filename, sim_threshold=0.69, k=20): 
+def semantic_search_FAISS(text_chunks, queries, filename, sim_threshold=0.69, k=20, max_retries=3): 
     """
     Perform a semantic search over a collection of text chunks using a vector store with FAISS.
     The vector store is saved for future use.
@@ -141,6 +160,7 @@ def semantic_search_FAISS(text_chunks, queries, filename, sim_threshold=0.69, k=
         filename (str): The name of the file being processed (used for naming the vector store)
         sim_threshold (float, optional): The minimum cosine similarity score to consider a match. Defaults to 0.69.
         k (int, optional): The number of top matches to retrieve for each query. Defaults to 20.
+        max_retries (int, optional): The maximum number of retries for creating embeddings in case of service unavailability. Defaults to 3.
 
     Returns:
         list of dict: A list of dictionaries representing the matched results. Each dictionary contains:
@@ -158,9 +178,20 @@ def semantic_search_FAISS(text_chunks, queries, filename, sim_threshold=0.69, k=
     base_filename = os.path.splitext(os.path.basename(filename))[0]
     vector_store_path = os.path.join(vector_store_dir, f"{base_filename}_vectorstore")
     
-    # Create and save the vector store
-    vectorstore = FAISS.from_documents(documents, embedding_model)
-    vectorstore.save_local(vector_store_path)
+    # Create and save the vector store with retry logic
+    for attempt in range(max_retries):
+        try:
+            vectorstore = FAISS.from_documents(documents, embedding_model)
+            vectorstore.save_local(vector_store_path)
+            break  # Success, exit retry loop
+        except InternalServerError as e:
+            if attempt < max_retries - 1:  # Don't sleep on the last attempt
+                wait_time = (2 ** attempt) + random.uniform(0, 1)  # Exponential backoff with jitter
+                logging.warning(f"Azure OpenAI service temporarily unavailable (attempt {attempt + 1}/{max_retries}). Retrying in {wait_time:.2f} seconds...")
+                time.sleep(wait_time)
+            else:
+                logging.error(f"Failed to create embeddings after {max_retries} attempts: {e}")
+                raise  # Re-raise the exception after all retries failed
 
     # Perform similarity search for each query with minimum score threshold
     matches = []
@@ -260,6 +291,7 @@ def extract_quotes(matches, filename):
     
     Returns:
         list: Original matches with extracted quotes added
+        int: Total tokens used during the extraction process
     """
     # Convert matches into the dictionary format needed for get_quotes
     doc_dict = {}
@@ -285,9 +317,11 @@ def extract_quotes(matches, filename):
         with open(quotes_path, 'w', encoding='utf-8') as f:
             json.dump(quotes_dict, f, ensure_ascii=False, indent=4)
         
-        print(f"Total tokens used: {cb.total_tokens}")
+        # Log the total tokens used
+        total_tokens = cb.total_tokens
+        logging.info(f"Total tokens used for quote extraction: {total_tokens}")
 
-    return quotes_dict
+    return quotes_dict, total_tokens
 
 def highlight_terms_in_pdf(pdf_path, query_terms):
     """
@@ -423,6 +457,11 @@ def create_results_zip():
         io.BytesIO: An in-memory zip file containing the results folder
     """
     results_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results')
+    
+    # Check if the results folder exists and contains files
+    if not os.path.exists(results_folder) or not any(os.scandir(results_folder)):
+        raise FileNotFoundError("The results folder is empty or does not exist.")
+    
     memory_file = io.BytesIO()
     
     with ZipFile(memory_file, 'w') as zf:
@@ -432,7 +471,60 @@ def create_results_zip():
                 # Calculate the relative path for the file in the zip
                 relative_path = os.path.relpath(file_path, app.config['UPLOAD_FOLDER'])
                 zf.write(file_path, relative_path)
+     
+        # Add the log file to the zip    
+        log_file = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'logs', 'app.log')
+        if os.path.exists(log_file):
+            zf.write(log_file, os.path.relpath(log_file, app.config['UPLOAD_FOLDER']))
+
+    # Move to the beginning of the BytesIO buffer
+    memory_file.seek(0)
+    return memory_file
+
+def create_partial_results_zip():
+    """
+    Creates a zip file containing any available results, even if processing failed
     
+    Returns:
+        io.BytesIO: An in-memory zip file containing available results
+    """
+    results_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results')
+    
+    # Check if the results folder exists
+    if not os.path.exists(results_folder):
+        raise FileNotFoundError("No results folder found.")
+    
+    memory_file = io.BytesIO()
+    files_added = 0
+    
+    with ZipFile(memory_file, 'w') as zf:
+        # Add any files that exist in the results folder structure
+        for root, dirs, files in os.walk(results_folder):
+            for file in files:
+                file_path = os.path.join(root, file)
+                # Calculate the relative path for the file in the zip
+                relative_path = os.path.relpath(file_path, app.config['UPLOAD_FOLDER'])
+                zf.write(file_path, relative_path)
+                files_added += 1
+        
+        # If no files were found, add a readme explaining the situation
+        if files_added == 0:
+            readme_content = """PARTIAL RESULTS README
+============================
+
+This download contains partial results from a processing task that encountered an error.
+
+Unfortunately, no output files were generated before the error occurred.
+However, you may find useful information in the error details provided in the web interface.
+
+For support, please provide:
+1. The error message and traceback
+2. The original document you were trying to process
+3. Any query terms you specified
+
+"""
+            zf.writestr("README_PARTIAL_RESULTS.txt", readme_content)
+
     # Move to the beginning of the BytesIO buffer
     memory_file.seek(0)
     return memory_file
@@ -455,35 +547,70 @@ def process_document(task_id, file_path, query_terms, filename):
             "result": None,
             "error": None,
             "traceback": None,
-            "original_filename": filename  # Store the original filename
+            "original_filename": filename,  # Store the original filename
+            "partial_results": {}  # Store partial results
         }
+
+        # Start total runtime timer
+        total_start_time = time.time()
+        total_tokens_used = 0  # Initialize total token counter
         
         # Step 1: Extract text with Unstructured (20%)
+        start_time = time.time()
         processing_tasks[task_id]["status"] = "Extracting text from document..."
         unstructured_text = extract_text_with_unstructured(file_path)
         processing_tasks[task_id]["progress"] = 20
+        processing_tasks[task_id]["partial_results"]["text_extraction"] = True  # Mark as completed
+        preprocessing_time = time.time() - start_time
+        logging.info(f"Text extraction completed for file: {filename} in {preprocessing_time:.2f} seconds.")
         
         # Step 2: Perform semantic search (40%)
+        start_time = time.time()
         processing_tasks[task_id]["status"] = "Performing semantic search..."
         chunks = semantic_search_FAISS(unstructured_text, query_terms, 
                                       os.path.splitext(os.path.basename(file_path))[0])
         processing_tasks[task_id]["progress"] = 40
+        processing_tasks[task_id]["partial_results"]["semantic_search"] = True  # Mark as completed
+        retrieval_time = time.time() - start_time
+        logging.info(f"Semantic search completed for file: {filename} in {retrieval_time:.2f} seconds.")
         
         # Step 3: Extract quotes (60%)
+        start_time = time.time()
         processing_tasks[task_id]["status"] = "Extracting quotes from relevant sections..."
-        citations = extract_quotes(chunks, os.path.basename(file_path))
+        citations, tokens_used = extract_quotes(chunks, os.path.basename(file_path))
+        total_tokens_used += tokens_used  # Update total tokens used
         processing_tasks[task_id]["progress"] = 60
+        processing_tasks[task_id]["partial_results"]["quote_extraction"] = True  # Mark as completed
+        quotation_time = time.time() - start_time
+        logging.info(f"Quote extraction completed for file: {filename} in {quotation_time:.2f} seconds. Tokens used: {tokens_used}.")
         
         # Step 4: Classify quotes (80%)
+        start_time = time.time()
         processing_tasks[task_id]["status"] = "Classifying extracted quotes..."
-        classified = classify_quotes(citations, file_path)
+        with get_openai_callback() as cb:
+            classified = classify_quotes(citations, file_path)
+            tokens_used = cb.total_tokens
+            total_tokens_used += tokens_used  # Update total tokens used
         processing_tasks[task_id]["progress"] = 80
+        processing_tasks[task_id]["partial_results"]["classification"] = True  # Mark as completed
+        classification_time = time.time() - start_time
+        logging.info(f"Quote classification completed for file: {filename} in {classification_time:.2f} seconds. Tokens used: {tokens_used}.")
         
         # Step 5: Post-process results (100%)
+        start_time = time.time()
         processing_tasks[task_id]["status"] = "Finalizing results..."
         postprocess_results(file_path, classified, filename)
         processing_tasks[task_id]["progress"] = 100
-        
+        processing_tasks[task_id]["partial_results"]["postprocessing"] = True  # Mark as completed
+        postprocessing_time = time.time() - start_time
+        logging.info(f"Post-processing completed for task_id: {task_id}, file: {filename} in {postprocessing_time:.2f} seconds.")
+
+        # Calculate total runtime
+        total_elapsed_time = time.time() - total_start_time
+
+        logging.info(f"Total processing time for file: {filename} was {total_elapsed_time:.2f} seconds.")
+        logging.info(f"Total tokens used for file: {filename} was {total_tokens_used}.")
+
         # Store results for retrieval
         processing_tasks[task_id]["status"] = "Analysis complete"
         processing_tasks[task_id]["result"] = citations
@@ -497,8 +624,8 @@ def process_document(task_id, file_path, query_terms, filename):
         processing_tasks[task_id]["error"] = str(e)
         processing_tasks[task_id]["traceback"] = error_traceback
         processing_tasks[task_id]["status"] = f"Error: {str(e)}"
-        print(f"Error processing document: {str(e)}")
-        print(f"Traceback: {error_traceback}")
+        logging.error(f"Error processing document: {e}")
+        logging.error(f"Traceback: {error_traceback}")
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -523,6 +650,9 @@ def index():
             os.makedirs(by_products_folder, exist_ok=True)  # Ensure the subfolder exists
             file_path = os.path.join(by_products_folder, filename)
             file.save(file_path)
+
+            # Log the file upload
+            logging.info(f"File uploaded: {file.filename}")
 
             # Start processing in a background thread
             thread = threading.Thread(target=process_document, 
@@ -575,6 +705,12 @@ def progress(task_id):
             response["error"] = task["error"]
             response["traceback"] = task["traceback"]
             
+            # Check if any partial results are available for download
+            partial_results = task.get("partial_results", {})
+            has_partial_results = any(partial_results.values())
+            response["has_partial_results"] = has_partial_results
+            response["partial_results_summary"] = partial_results
+
         return jsonify(response)
     else:
         return jsonify({"error": "Task not found"}), 404
@@ -586,24 +722,70 @@ def download_results():
     Route to download the entire results folder as a zip file
     with a filename based on the original document
     """
-    # Get the task_id and original filename from query parameters
-    task_id = request.args.get('task_id', '')
-    original_filename = request.args.get('filename', 'analysis')
-    
-    # Create zip file
-    memory_file = create_results_zip()
-    
-    # Use the original filename (without extension) for the download
-    base_filename = os.path.splitext(original_filename)[0]
-    download_name = f'{base_filename}_analysis.zip'
-    
-    return send_file(
-        memory_file,
-        download_name=download_name,
-        as_attachment=True,
-        mimetype='application/zip'
-    )
+    try:
+        # Get the task_id and original filename from query parameters
+        task_id = request.args.get('task_id', '')
+        original_filename = request.args.get('filename', 'analysis')
+        
+        # Create zip file
+        memory_file = create_results_zip()
+        
+        # Use the original filename (without extension) for the download
+        base_filename = os.path.splitext(original_filename)[0]
+        download_name = f'{base_filename}_analysis.zip'
+        
+        return send_file(
+            memory_file,
+            download_name=download_name,
+            as_attachment=True,
+            mimetype='application/zip'
+        )
+    except FileNotFoundError as e:
+        logging.error(f"Download error: {e}")
+        return f"Error: {e}", 404
+    except Exception as e:
+        logging.error(f"Unexpected error during download: {e}")
+        return "Internal Server Error", 500
+
+
+@app.route('/download-partial')
+def download_partial_results():
+    """
+    Route to download partial results when processing fails
+    """
+    try:
+        # Get the task_id and original filename from query parameters
+        task_id = request.args.get('task_id', '')
+        original_filename = request.args.get('filename', 'analysis')
+        
+        # Verify the task exists and has an error
+        if task_id not in processing_tasks:
+            return "Task not found", 404
+            
+        task = processing_tasks[task_id]
+        if task.get("error") is None:
+            return "No error occurred for this task. Use the regular download instead.", 400
+        
+        # Create partial results zip file
+        memory_file = create_partial_results_zip()
+        
+        # Use the original filename (without extension) for the download
+        base_filename = os.path.splitext(original_filename)[0]
+        download_name = f'{base_filename}_partial_results.zip'
+        
+        return send_file(
+            memory_file,
+            download_name=download_name,
+            as_attachment=True,
+            mimetype='application/zip'
+        )
+    except FileNotFoundError as e:
+        logging.error(f"Partial download error: {e}")
+        return f"Error: {e}", 404
+    except Exception as e:
+        logging.error(f"Unexpected error during partial download: {e}")
+        return "Internal Server Error", 500
+
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5006)  # Set debug=True for development
-
+    app.run(debug=False, port=5003)  # Set debug=True for development

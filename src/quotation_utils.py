@@ -12,7 +12,8 @@ import copy
 
 from tqdm import tqdm
 from typing import List, Optional
-from langchain_core.pydantic_v1 import BaseModel
+#from langchain_core.pydantic_v1 import BaseModel deprecated, use pydantic instead
+from pydantic import BaseModel
 from langchain_core.output_parsers import JsonOutputParser # "Probably the most reliable output parser for getting structured data that does NOT use function calling." (https://python.langchain.com/v0.1/docs/modules/model_io/output_parsers/ )
 from langchain_core.output_parsers import PydanticOutputParser # https://python.langchain.com/v0.1/docs/modules/model_io/output_parsers/types/pydantic/
 from langchain_core.prompts import PromptTemplate

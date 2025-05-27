@@ -1,0 +1,73 @@
+name: transportpolicyminer_venv
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - pip=23.3.1
+  
+  # Core data science packages
+  - pandas
+  - numpy
+  
+  # Development tools that aren't directly used by the Flask app
+#  - black=23.11.0  # Code formatter, useful for development but not runtime
+#  - flake8=7.0.0  # Linter, useful for development but not runtime
+#  - pylint=2.16.2  # Linter, useful for development but not runtime
+#  - autopep8=2.0.4  # Code formatter, useful for development but not runtime
+  
+  # Text processing and NLP
+  - gensim
+  - langchain=0.1.16
+  - langchain-text-splitters=0.0.1
+  - pypdf2=2.11.1
+  - tesseract=4.1.1
+  - tesserocr=2.5.1
+  
+  # Web and visualization
+  - dash=2.17.1
+  - dash-bootstrap-components=1.6.0
+  - pyarrow
+  - flask=3.0.3
+  - werkzeug
+  
+  # Vector search and embeddings
+  - faiss-cpu
+  
+  # Utility
+  - pyyaml=6.0.1
+  - requests=2.31.0
+  - rich=13.3.5
+  - fire=0.6.0
+#  - codecarbon=1.2.0  # For tracking carbon emissions of code
+  - pynvml=11.5.0
+  
+  # SSL certificates
+  - ca-certificates
+  - openssl=1.1.1s
+  
+  # Add pip packages if needed
+  - pip:
+    - pymupdf
+    - unstructured
+    - unstructured-inference
+    - unstructured-pytesseract
+    - langchain-openai
+    - langchain-community
+    - chromadb
+    - python-dotenv
+    - uuid
+    - zipfile38
+    - pdfminer.six
+    - pi-heif
+    - python-magic
+    - filetype
+    - pillow
+    - lxml
+#    - beautifulsoup4
+    - nltk
+    - openpyxl
+#    - tika
+    - pdf2image
+    - gunicorn
+prefix: ${CONDA_PREFIX}/envs/transportpolicyminer_venv

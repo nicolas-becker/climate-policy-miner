@@ -43,6 +43,19 @@
             display: flex;
             justify-content: center;
             gap: 10px;
+            flex-wrap: wrap;
+        }
+        .copy-success {
+            background-color: #d4edda !important;
+            border-color: #c3e6cb !important;
+            color: #155724 !important;
+        }
+        .final-actions {
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
         }
     </style>
 </head>
@@ -56,14 +69,41 @@
                      aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
             </div>
             <p id="status-text" class="status-text">Starting analysis...</p>
-            <div id="error-container" class="error-message" style="display: none;">
-                <h5>Error During Processing</h5>
-                <p id="error-text"></p>
+            
+            <div id="error-container" style="display: none;">
+                <p class="text-center mt-3 mb-3"><strong>Pipeline was interrupted due to the following error:</strong></p>
+                
+                <!-- Red error box -->
+                <div class="error-message">
+                    <p id="error-text" class="mb-0"></p>
+                </div>
+                
+                <!-- Error detail buttons -->
                 <div class="error-actions">
                     <button id="toggle-traceback" class="btn btn-outline-danger btn-sm">Show Full Error Details</button>
+                    <button id="copy-error-btn" class="btn btn-outline-secondary btn-sm" onclick="copyErrorToClipboard()">
+                        📋 Copy Error Details
+                    </button>
+                </div>
+                
+                <!-- Traceback container -->
+                <div id="traceback-container" class="traceback"></div>
+                
+                <!-- Green partial results info box -->
+                <div id="partial-results-info" class="mt-3" style="display: none;">
+                    <div class="alert alert-success">
+                        <strong>Partial Results Available:</strong>
+                        <ul id="partial-results-list" class="mb-0 mt-2"></ul>
+                    </div>
+                </div>
+                
+                <!-- Final action buttons -->
+                <div class="final-actions">
+                    <button id="download-partial-btn" class="btn btn-warning btn-sm" style="display: none;" onclick="downloadPartialResults()">
+                        📦 Download Partial Results
+                    </button>
                     <a href="{{ url_for('index') }}" class="btn btn-primary">Return to Home</a>
                 </div>
-                <div id="traceback-container" class="traceback"></div>
             </div>
         </div>
     </div>
@@ -73,6 +113,12 @@
         const taskId = "{{ task_id }}";
         let tracebackVisible = false;
         
+        // Function to download partial results
+        function downloadPartialResults() {
+            const originalFilename = "{{ task_id }}"; // You might want to get this from the task data
+            window.location.href = `/download-partial?task_id=${taskId}&filename=${originalFilename}`;
+        }
+
         // Function to toggle traceback visibility
         function toggleTraceback() {
             const tracebackContainer = document.getElementById('traceback-container');
@@ -86,6 +132,62 @@
                 toggleButton.textContent = 'Hide Error Details';
             }
             tracebackVisible = !tracebackVisible;
+        }
+
+        // Function to copy error details to clipboard
+        function copyErrorToClipboard() {
+            const errorMessage = document.getElementById('error-text').textContent;
+            const errorTraceback = document.getElementById('traceback-container').textContent;
+            
+            const fullErrorText = `Error: ${errorMessage}\n\nTechnical Details:\n${errorTraceback}`;
+            
+            // Try to use the modern clipboard API
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(fullErrorText).then(() => {
+                    showCopyFeedback('Error details copied to clipboard!');
+                }).catch(() => {
+                    fallbackCopyToClipboard(fullErrorText);
+                });
+            } else {
+                // Fallback for older browsers or non-HTTPS
+                fallbackCopyToClipboard(fullErrorText);
+            }
+        }
+
+        function fallbackCopyToClipboard(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                showCopyFeedback('Error details copied to clipboard!');
+            } catch (err) {
+                showCopyFeedback('Failed to copy. Please select and copy manually.');
+            }
+            
+            document.body.removeChild(textArea);
+        }
+
+        function showCopyFeedback(message) {
+            const button = document.getElementById('copy-error-btn');
+            const originalText = button.innerHTML;
+            const originalClasses = button.className;
+            
+            button.innerHTML = '✅ ' + message;
+            button.className = originalClasses + ' copy-success';
+            button.disabled = true;
+            
+            setTimeout(() => {
+                button.innerHTML = originalText;
+                button.className = originalClasses;
+                button.disabled = false;
+            }, 2000);
         }
         
         // Add event listener to the toggle button
@@ -114,7 +216,7 @@
                     if (data.progress === 100 && data.redirect) {
                         window.location.href = data.redirect;
                     } else if (data.error) {
-                        // Show error message
+                        // Show error container
                         document.getElementById('error-container').style.display = 'block';
                         document.getElementById('error-text').textContent = data.error;
                         
@@ -125,6 +227,35 @@
                             document.getElementById('traceback-container').textContent = 
                                 'No detailed error information available. Check server logs for more details.';
                         }
+                    
+                        // Show partial results download option if available
+                        if (data.has_partial_results) {
+                            document.getElementById('partial-results-info').style.display = 'block';
+                            document.getElementById('download-partial-btn').style.display = 'inline-block';
+                            
+                            // Show what partial results are available
+                            const partialResultsList = document.getElementById('partial-results-list');
+                            const partialResults = data.partial_results_summary || {};
+                            partialResultsList.innerHTML = '';
+                            
+                            const stepNames = {
+                                'text_extraction': 'Text extraction from PDF',
+                                'semantic_search': 'Semantic search results',
+                                'quote_extraction': 'Extracted quotes',
+                                'classification': 'Quote classification',
+                                'postprocessing': 'Final processing'
+                            };
+                            
+                            for (const [step, completed] of Object.entries(partialResults)) {
+                                if (completed) {
+                                    const li = document.createElement('li');
+                                    li.textContent = `✅ ${stepNames[step] || step}`;
+                                    li.className = 'text-success';
+                                    partialResultsList.appendChild(li);
+                                }
+                            }
+                        }
+
                     } else {
                         // Otherwise, continue polling
                         setTimeout(updateProgress, 1000);
