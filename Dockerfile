@@ -27,9 +27,9 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 # Copy source code
 COPY src/ ./src/
-# COPY src/quotation_utils.py .
-# COPY src/classification_utils.py .
-# COPY src/general_utils.py .
+COPY src/quotation_utils.py .
+COPY src/classification_utils.py .
+COPY src/general_utils.py .
 
 # Create necessary directories
 RUN mkdir -p /app/data /app/results
