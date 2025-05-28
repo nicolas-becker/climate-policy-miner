@@ -1,31 +1,45 @@
-# Use a lightweight Conda base image
-FROM continuumio/miniconda3:latest
+FROM python:3.9-slim
 
-# Set the working directory in the container
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PORT=5000
+
 WORKDIR /app
 
-# Copy the application code and environment file into the container
-COPY . /app
+# Install system dependencies (much faster than conda)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libgl1 \
+        libglib2.0-0 \
+        poppler-utils \
+        tesseract-ocr \
+        tesseract-ocr-eng \
+        curl \
+        gcc \
+        g++ \
+        libc6-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install system-level dependencies
-RUN apt-get update && apt-get install -y libgl1 libglib2.0-0 poppler-utils
+# Copy and install Python requirements (much faster than conda)
+COPY requirements_app.txt .
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements_app.txt
 
-# Install dependencies from the Conda environment file
-RUN conda env create -f environment_app.yml
+# Copy source code
+COPY src/ ./src/
+COPY src/quotation_utils.py .
+COPY src/classification_utils.py .
+COPY src/general_utils.py .
 
-# Activate the environment and ensure it is used by default
-RUN echo "conda activate transportpolicyminer_venv" >> ~/.bashrc
-ENV PATH=/opt/conda/envs/transportpolicyminer_venv/bin:$PATH
+# Create necessary directories
+RUN mkdir -p /app/data /app/results
 
-# Expose the port Flask will run on
-EXPOSE 5000
+EXPOSE $PORT
 
-# Set the environment variable for Flask
-ENV FLASK_APP=src/flask_app.py
-ENV FLASK_RUN_HOST=0.0.0.0
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:$PORT/health || exit 1
 
-# Run the Flask app
-#CMD ["flask", "run"] # Uncomment this line to run with Flask's development server
-# Use Gunicorn for production deployment
-# -w 4: 4 worker processes
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "src.flask_app:app"]
+# Run with gunicorn
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:5000", "--timeout", "300", "src.flask_app:app"]

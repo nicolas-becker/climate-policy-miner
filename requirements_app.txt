@@ -1,0 +1,57 @@
+# Core Flask and web server
+flask==3.0.3
+gunicorn==21.2.0
+werkzeug==3.0.1
+
+# Data processing
+pandas==2.1.4
+numpy==1.24.3
+
+# LangChain ecosystem
+langchain==0.1.16
+langchain-openai==0.1.6
+langchain-community==0.0.32
+langchain-text-splitters==0.0.1
+langsmith==0.1.17
+
+# Document processing
+pymupdf==1.24.2
+unstructured[pdf]==0.12.4
+unstructured-inference==0.7.23
+
+# Vector stores and embeddings
+faiss-cpu==1.7.4
+chromadb==0.4.22
+
+# Azure OpenAI and OpenAI
+openai==1.12.0
+
+# Utilities
+python-dotenv==1.0.0
+openpyxl==3.1.2
+pillow==10.2.0
+lxml==4.9.4
+requests==2.31.0
+pyyaml==6.0.1
+
+# Additional packages from your code
+fire==0.6.0
+pynvml==11.5.0
+tqdm==4.66.1
+pydantic==2.5.3
+
+# PDF processing dependencies
+pdf2image==1.17.0
+pypdf2==2.11.1
+
+# Natural language processing
+nltk==3.8.1
+
+# System dependencies (these will be installed via apt-get in Dockerfile)
+# poppler-utils (for pdf2image)
+# tesseract-ocr (for OCR functionality)
+# tesseract-ocr-eng (English language pack)
+
+# Optional: for enhanced functionality
+# fuzzywuzzy==0.18.0  # if you want to use fuzzy string matching
+# python-levenshtein==0.21.1  # for faster fuzzy matching

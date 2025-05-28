@@ -627,6 +627,15 @@ def process_document(task_id, file_path, query_terms, filename):
         logging.error(f"Error processing document: {e}")
         logging.error(f"Traceback: {error_traceback}")
 
+@app.route('/health')
+def health_check():
+    """Health check endpoint for Render.com"""
+    return jsonify({
+        "status": "healthy",
+        "timestamp": time.time(),
+        "version": "1.0.0"
+    }), 200
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     """
@@ -788,4 +797,6 @@ def download_partial_results():
 
 
 if __name__ == '__main__':
-    app.run(debug=False, port=5003)  # Set debug=True for development
+    # For Render.com, use the PORT environment variable
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)  # Set debug=True for development
