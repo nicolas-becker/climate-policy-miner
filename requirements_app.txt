@@ -40,8 +40,8 @@ pydantic
 # PDF processing dependencies
 pdf2image
 pypdf2==2.11.1
-tesseract=4.1.1
-tesserocr=2.5.1
+tesseract==4.1.1
+tesserocr==2.5.1
 
 # Natural language processing
 nltk
