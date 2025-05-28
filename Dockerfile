@@ -27,9 +27,9 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 # Copy source code
 COPY src/ ./src/
-COPY src/quotation_utils.py .
-COPY src/classification_utils.py .
-COPY src/general_utils.py .
+# COPY src/quotation_utils.py .
+# COPY src/classification_utils.py .
+# COPY src/general_utils.py .
 
 # Create necessary directories
 RUN mkdir -p /app/data /app/results
@@ -39,4 +39,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${PORT:-10000}/health || exit 1
 
 # Run with gunicorn
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:${PORT:-10000}", "--timeout", "300", "src.flask_app:app"]
+CMD gunicorn -w 1 -b 0.0.0.0:${PORT:-10000} --timeout 600 --keep-alive 2 --max-requests 100 --worker-class sync src.flask_app:app
