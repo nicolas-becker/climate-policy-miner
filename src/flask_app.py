@@ -633,7 +633,8 @@ def health_check():
     return jsonify({
         "status": "healthy",
         "timestamp": time.time(),
-        "version": "1.0.0"
+        "port": os.environ.get('PORT', 'not set'),
+        "service": "climate-policy-miner"
     }), 200
 
 @app.route('/', methods=['GET', 'POST'])
@@ -798,5 +799,5 @@ def download_partial_results():
 
 if __name__ == '__main__':
     # For Render.com, use the PORT environment variable
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)  # Set debug=True for development

@@ -3,7 +3,6 @@ FROM python:3.9-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV PORT=5000
 
 WORKDIR /app
 
@@ -35,11 +34,9 @@ COPY src/general_utils.py .
 # Create necessary directories
 RUN mkdir -p /app/data /app/results
 
-EXPOSE $PORT
-
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:$PORT/health || exit 1
+    CMD curl -f http://localhost:${PORT:-10000}/health || exit 1
 
 # Run with gunicorn
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:5000", "--timeout", "300", "src.flask_app:app"]
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:${PORT:-10000}", "--timeout", "300", "src.flask_app:app"]
