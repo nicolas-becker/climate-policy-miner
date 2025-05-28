@@ -1,11 +1,11 @@
 # Core Flask and web server
 flask==3.0.3
-gunicorn==21.2.0
-werkzeug==3.0.1
+gunicorn
+werkzeug
 
 # Data processing
-pandas==2.1.4
-numpy==1.24.3
+pandas
+numpy
 
 # LangChain ecosystem
 langchain==0.1.16
@@ -15,34 +15,36 @@ langchain-text-splitters==0.0.1
 langsmith==0.1.17
 
 # Document processing
-pymupdf==1.24.2
-unstructured[pdf]==0.12.4
-unstructured-inference==0.7.23
+pymupdf
+unstructured[pdf]
+unstructured-inference
 
 # Vector stores and embeddings
-faiss-cpu==1.7.4
-chromadb==0.4.22
+faiss-cpu
+chromadb
 
 # Utilities
-python-dotenv==1.0.0
-openpyxl==3.1.2
-pillow==10.2.0
-lxml==4.9.4
+python-dotenv
+openpyxl
+pillow
+lxml
 requests==2.31.0
 pyyaml==6.0.1
 
 # Additional packages from your code
 fire==0.6.0
 pynvml==11.5.0
-tqdm==4.66.1
-pydantic==2.5.3
+tqdm
+pydantic
 
 # PDF processing dependencies
-pdf2image==1.17.0
+pdf2image
 pypdf2==2.11.1
+tesseract=4.1.1
+tesserocr=2.5.1
 
 # Natural language processing
-nltk==3.8.1
+nltk
 
 # System dependencies (these will be installed via apt-get in Dockerfile)
 # poppler-utils (for pdf2image)
