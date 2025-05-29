@@ -15,6 +15,7 @@ langchain-text-splitters==0.0.1
 langsmith==0.1.17
 
 # Document processing
+requests==2.31.0
 pymupdf
 unstructured[pdf]
 unstructured-inference

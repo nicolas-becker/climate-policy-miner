@@ -22,6 +22,9 @@ import threading
 import logging
 import time
 import random
+import requests
+import mimetypes
+from urllib.parse import urlparse
 from werkzeug.utils import secure_filename
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
 from langchain.schema import HumanMessage
@@ -81,7 +84,7 @@ LLM = AzureChatOpenAI(
 
 # Embedding function
 # These embeddings are used for semantic search and similarity comparisons.
-embedding_model = AzureOpenAIEmbeddings(
+EMBEDDING = AzureOpenAIEmbeddings(
     openai_api_key=os.environ["AZURE_OPENAI_API_KEY"],
     deployment = 'embeds'
     )
@@ -99,6 +102,90 @@ TAXONOMY = ["Transport",
             "Target",
             "Measure"
             ]
+
+# Add these imports at the top with your other imports
+import requests
+from urllib.parse import urlparse
+import mimetypes
+
+def download_pdf_from_url(url, save_dir):
+    """
+    Downloads a PDF file from a URL and saves it to the specified directory.
+    
+    Args:
+        url (str): The URL of the PDF file
+        save_dir (str): Directory to save the downloaded file
+        
+    Returns:
+        tuple: (file_path, filename) if successful, (None, None) if failed
+    """
+    try:
+        # Validate URL
+        parsed_url = urlparse(url)
+        if not parsed_url.netloc:
+            raise ValueError("Invalid URL provided")
+        
+        # Set up headers to mimic a browser request
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        # Make the request with a timeout
+        logging.info(f"Downloading PDF from URL: {url}")
+        response = requests.get(url, headers=headers, timeout=30, stream=True)
+        response.raise_for_status()  # Raises an HTTPError for bad responses
+        
+        # Check if the response is actually a PDF
+        content_type = response.headers.get('content-type', '').lower()
+        if 'application/pdf' not in content_type:
+            # Try to determine from URL extension as fallback
+            if not url.lower().endswith('.pdf'):
+                raise ValueError("URL does not point to a PDF file")
+        
+        # Generate filename from URL
+        parsed_path = urlparse(url).path
+        if parsed_path:
+            filename = os.path.basename(parsed_path)
+            if not filename.endswith('.pdf'):
+                filename += '.pdf'
+        else:
+            filename = 'downloaded_document.pdf'
+        
+        # Ensure filename is secure
+        filename = secure_filename(filename)
+        if not filename:
+            filename = 'downloaded_document.pdf'
+        
+        # Save the file
+        file_path = os.path.join(save_dir, filename)
+        
+        with open(file_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        # Verify the file was downloaded and has content
+        if os.path.getsize(file_path) == 0:
+            os.remove(file_path)
+            raise ValueError("Downloaded file is empty")
+        
+        logging.info(f"Successfully downloaded PDF: {filename} ({os.path.getsize(file_path)} bytes)")
+        return file_path, filename
+        
+    except requests.exceptions.Timeout:
+        logging.error(f"Timeout downloading PDF from URL: {url}")
+        raise ValueError("Download timeout - the server took too long to respond")
+    except requests.exceptions.ConnectionError:
+        logging.error(f"Connection error downloading PDF from URL: {url}")
+        raise ValueError("Connection error - could not reach the server")
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"HTTP error downloading PDF from URL: {url} - {e}")
+        raise ValueError(f"HTTP error {e.response.status_code} - could not download the file")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Request error downloading PDF from URL: {url} - {e}")
+        raise ValueError(f"Request error - {str(e)}")
+    except Exception as e:
+        logging.error(f"Unexpected error downloading PDF from URL: {url} - {e}")
+        raise ValueError(f"Unexpected error - {str(e)}")
 
 def extract_text_with_unstructured(pdf_path, min_lenght=10, max_length=10000):
     """
@@ -120,7 +207,7 @@ def extract_text_with_unstructured(pdf_path, min_lenght=10, max_length=10000):
                             coordinates=True,  # return bounding box coordinates for each element extracted via OCR
                             #infer_table_structure=True,  # infer table structure
                             #extract_images_in_pdf=True,  # extract images in PDF
-                            languages=['eng','jpn'],  # language detection
+                            languages=['eng','','jpn'],  # language detection
                             #extract_image_block_types=["Image", "Table"],  # The types of elements to extract, for use in extracting image blocks as base64 encoded data stored in metadata fields
                             )
     elements = chunk_by_title(elements=elements,
@@ -147,7 +234,7 @@ def extract_text_with_unstructured(pdf_path, min_lenght=10, max_length=10000):
     
     return content
 
-def semantic_search_FAISS(text_chunks, queries, filename, sim_threshold=0.69, k=20, max_retries=3): 
+def semantic_search_FAISS(text_chunks, queries, filename, embedding_model, sim_threshold=0.69, k=20, max_retries=3): 
     """
     Perform a semantic search over a collection of text chunks using a vector store with FAISS.
     The vector store is saved for future use.
@@ -209,7 +296,7 @@ def semantic_search_FAISS(text_chunks, queries, filename, sim_threshold=0.69, k=
                 })
     return matches
 
-def semantic_search_Chroma(text_chunks, queries, filename, sim_threshold=0.65, k=20):
+def semantic_search_Chroma(text_chunks, queries, filename, embedding_model, sim_threshold=0.65, k=20):
     """
     Perform a semantic search over a collection of text chunks using Chroma with cosine similarity.
     The vector store is saved for future use.
@@ -568,7 +655,8 @@ def process_document(task_id, file_path, query_terms, filename):
         start_time = time.time()
         processing_tasks[task_id]["status"] = "Performing semantic search..."
         chunks = semantic_search_FAISS(unstructured_text, query_terms, 
-                                      os.path.splitext(os.path.basename(file_path))[0])
+                                      os.path.splitext(os.path.basename(file_path))[0],
+                                      embedding_model=EMBEDDING)
         processing_tasks[task_id]["progress"] = 40
         processing_tasks[task_id]["partial_results"]["semantic_search"] = True  # Mark as completed
         retrieval_time = time.time() - start_time
@@ -640,30 +728,66 @@ def health_check():
 @app.route('/', methods=['GET', 'POST'])
 def index():
     """
-    Home route that handles file uploads and initiates document processing
+    Home route that handles file uploads, URL downloads, and initiates document processing
     """
     if request.method == 'POST':
-        file = request.files['pdf_file']
+        # Get input method (upload or url)
+        input_method = request.form.get('input_method', 'upload')
+        
         # Get any extra user terms (optional) as a list
-        extra = request.form['query_terms'].split(',')
+        extra = request.form.get('query_terms', '').split(',')
         if extra != ['']:
             query_terms = DEFAULT_QUERY + extra
         else:
             query_terms = DEFAULT_QUERY
 
-        if file:
+        file_path = None
+        filename = None
+        
+        try:
+            # Create directories
+            by_products_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'by-products')
+            os.makedirs(by_products_folder, exist_ok=True) # Ensure the subfolder exists
+            
+            if input_method == 'upload':
+                # Handle file upload
+                file = request.files.get('pdf_file')
+                if not file or file.filename == '':
+                    return render_template('index.html', error="Please select a PDF file to upload.")
+                
+                filename = secure_filename(file.filename)
+                file_path = os.path.join(by_products_folder, filename)
+                file.save(file_path)
+
+                # Log the file upload
+                logging.info(f"File uploaded: {file.filename}")
+                
+            elif input_method == 'url':
+                # Handle URL download
+                pdf_url = request.form.get('pdf_url', '').strip()
+                if not pdf_url:
+                    return render_template('index.html', error="Please enter a PDF URL.")
+                
+                try:
+                    file_path, filename = download_pdf_from_url(pdf_url, by_products_folder)
+                    if not file_path:
+                        return render_template('index.html', error="Failed to download PDF from the provided URL.")
+                except ValueError as e:
+                    return render_template('index.html', error=f"Download error: {str(e)}")
+                except Exception as e:
+                    logging.error(f"Unexpected error downloading from URL: {e}")
+                    return render_template('index.html', error="An unexpected error occurred while downloading the PDF.")
+            
+            else:
+                return render_template('index.html', error="Invalid input method selected.")
+            
+            # Verify we have a valid file
+            if not file_path or not os.path.exists(file_path):
+                return render_template('index.html', error="Failed to process the PDF file.")
+            
             # Generate a unique task ID
             task_id = str(uuid.uuid4())
             
-            filename = secure_filename(file.filename)
-            by_products_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'by-products')
-            os.makedirs(by_products_folder, exist_ok=True)  # Ensure the subfolder exists
-            file_path = os.path.join(by_products_folder, filename)
-            file.save(file_path)
-
-            # Log the file upload
-            logging.info(f"File uploaded: {file.filename}")
-
             # Start processing in a background thread
             thread = threading.Thread(target=process_document, 
                                     args=(task_id, file_path, query_terms, filename))
@@ -672,6 +796,10 @@ def index():
             
             # Redirect to progress page
             return render_template('progress.html', task_id=task_id)
+            
+        except Exception as e:
+            logging.error(f"Error in index route: {e}")
+            return render_template('index.html', error=f"An error occurred: {str(e)}")
             
     return render_template('index.html')
 
