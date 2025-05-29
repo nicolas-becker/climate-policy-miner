@@ -207,7 +207,7 @@ def extract_text_with_unstructured(pdf_path, min_lenght=10, max_length=10000):
                             coordinates=True,  # return bounding box coordinates for each element extracted via OCR
                             #infer_table_structure=True,  # infer table structure
                             #extract_images_in_pdf=True,  # extract images in PDF
-                            languages=['eng','','jpn'],  # language detection
+                            languages=['eng', 'ara', 'chi', 'fre', 'rus', 'spa'],  # languages used by the United Nations
                             #extract_image_block_types=["Image", "Table"],  # The types of elements to extract, for use in extracting image blocks as base64 encoded data stored in metadata fields
                             )
     elements = chunk_by_title(elements=elements,
