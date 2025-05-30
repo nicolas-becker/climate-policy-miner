@@ -45,6 +45,9 @@ from classification_utils import tagging_classifier_quotes
 from general_utils import create_highlighted_pdf
 import traceback
 import sys
+from unstructured.cleaners.core import clean_extra_whitespace, clean_dashes, clean_bullets
+import re
+import unicodedata
 
 # Initialize Flask application
 app = Flask(__name__)
@@ -187,52 +190,237 @@ def download_pdf_from_url(url, save_dir):
         logging.error(f"Unexpected error downloading PDF from URL: {url} - {e}")
         raise ValueError(f"Unexpected error - {str(e)}")
 
-def extract_text_with_unstructured(pdf_path, min_lenght=10, max_length=10000):
+def clean_elements(elements, apply_cleaning=True):
+    """
+    Clean and normalize text elements extracted from PDF documents.
+    This function applies general text cleaning operations that work across different document types.
+    
+    Args:
+        elements (list): List of unstructured elements from partition_pdf
+        apply_cleaning (bool): Whether to apply cleaning functions. Default: True.
+        
+    Returns:
+        list: A list of dictionaries containing cleaned text and metadata
+    """
+    if not apply_cleaning:
+        # Return elements without cleaning
+        content = []
+        for el in elements:
+            if el.text and el.text.strip():
+                content.append({
+                    "text": el.text.strip(),
+                    "metadata": el.metadata.to_dict() if el.metadata else {},
+                    "element_type": getattr(el, 'category', 'Unknown'),
+                    "cleaned": False
+                })
+        return content
+    
+    content = []
+    cleaning_stats = {
+        "total_elements": len(elements),
+        "processed_elements": 0,
+        "characters_before": 0,
+        "characters_after": 0,
+        "empty_after_cleaning": 0
+    }
+    
+    for el in elements:
+        if el.text and el.text.strip():
+            original_text = el.text.strip()
+            cleaning_stats["characters_before"] += len(original_text)
+            
+            try:
+                # Apply general text cleaning
+                cleaned_text = apply_general_cleaning(original_text)
+                cleaning_stats["characters_after"] += len(cleaned_text)
+                
+                # Only keep non-empty cleaned text
+                if cleaned_text and len(cleaned_text.strip()) >= 10:  # Minimum length threshold
+                    content.append({
+                        "text": cleaned_text,
+                        "original_text": original_text,
+                        "metadata": el.metadata.to_dict() if el.metadata else {},
+                        "element_type": getattr(el, 'category', 'Unknown'),
+                        "cleaned": True,
+                        "char_reduction": len(original_text) - len(cleaned_text)
+                    })
+                    cleaning_stats["processed_elements"] += 1
+                else:
+                    cleaning_stats["empty_after_cleaning"] += 1
+                    
+            except Exception as e:
+                # If cleaning fails, keep original text
+                logging.warning(f"Cleaning failed for element, keeping original: {e}")
+                content.append({
+                    "text": original_text,
+                    "metadata": el.metadata.to_dict() if el.metadata else {},
+                    "element_type": getattr(el, 'category', 'Unknown'),
+                    "cleaned": False
+                })
+                cleaning_stats["processed_elements"] += 1
+    
+    # Log cleaning statistics
+    char_reduction = cleaning_stats["characters_before"] - cleaning_stats["characters_after"]
+    reduction_percent = (char_reduction / cleaning_stats["characters_before"] * 100) if cleaning_stats["characters_before"] > 0 else 0
+    
+    logging.info(f"Text cleaning completed:")
+    logging.info(f"  - Processed: {cleaning_stats['processed_elements']}/{cleaning_stats['total_elements']} elements")
+    logging.info(f"  - Character reduction: {char_reduction} chars ({reduction_percent:.1f}%)")
+    logging.info(f"  - Empty after cleaning: {cleaning_stats['empty_after_cleaning']} elements")
+    
+    return content
+
+def apply_general_cleaning(text):
+    """
+    Apply general text cleaning operations suitable for any PDF document type.
+    
+    Args:
+        text (str): Raw text extracted from PDF
+        
+    Returns:
+        str: Cleaned and normalized text
+    """
+    if not text or not isinstance(text, str):
+        return text
+    
+    # Step 1: Unicode normalization
+    text = unicodedata.normalize('NFKC', text)
+    
+    # Step 2: Replace tab characters with single spaces
+    text = re.sub(r'\t+', ' ', text)
+    
+    # Step 3: Fix hyphenated words split across lines
+    text = re.sub(r'-\s*\n\s*', '', text)
+    
+    # Step 4: Clean up common PDF artifacts
+    text = re.sub(r'\f', ' ', text)  # Form feed characters
+    text = re.sub(r'\x0c', ' ', text)  # Page break characters
+    text = re.sub(r'\u00a0', ' ', text)  # Non-breaking spaces
+    
+    # Step 5: Remove standalone page numbers and common headers/footers
+    text = re.sub(r'^\s*\d+\s*$', '', text, flags=re.MULTILINE)  # Standalone numbers
+    text = re.sub(r'(?i)^\s*page\s+\d+(\s+of\s+\d+)?\s*$', '', text, flags=re.MULTILINE)
+    
+    # Step 6: Clean up bullet points and list markers
+    text = clean_bullets(text)
+    
+    # Step 7: Normalize dashes
+    text = clean_dashes(text)
+    
+    # Step 8: Fix spacing around punctuation
+    text = re.sub(r'\s*([,.;:])\s*', r'\1 ', text)
+    text = re.sub(r'\s*([.!?])\s*', r'\1 ', text)
+    text = re.sub(r'\s*([()[\]{}])\s*', r' \1 ', text)
+    
+    # Step 9: Clean up number formatting
+    text = re.sub(r'(\d+)\s*[.,]\s*(\d+)', r'\1.\2', text)  # Decimal numbers
+    text = re.sub(r'(\d+)\s*%', r'\1%', text)  # Percentages
+    text = re.sub(r'(\d+)\s*°', r'\1°', text)  # Degrees
+    
+    # Step 10: Reconnect sentences split inappropriately
+    # Join lines that end with lowercase and start with lowercase
+    text = re.sub(r'([a-z])\s*\n\s*([a-z])', r'\1 \2', text)
+    
+    # Step 11: Remove excessive whitespace
+    text = clean_extra_whitespace(text)
+    
+    # Step 12: Clean up multiple newlines but preserve paragraph breaks
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r'[ \t]+\n', '\n', text)  # Trailing spaces before newlines
+    text = re.sub(r'\n[ \t]+', '\n', text)  # Leading spaces after newlines
+    
+    # Step 13: Remove very short standalone words/characters on separate lines
+    text = re.sub(r'\n\s*[a-zA-Z]\s*\n', '\n', text)  # Single characters
+    text = re.sub(r'\n\s*[ivxlcdm]+\s*\n', '\n', text, flags=re.IGNORECASE)  # Roman numerals
+    
+    # Step 14: Clean up common abbreviations and acronyms spacing
+    # Fix spaced-out acronyms (e.g., "U S A" -> "USA")
+    text = re.sub(r'\b([A-Z])\s+([A-Z])\s+([A-Z])\b', r'\1\2\3', text)
+    text = re.sub(r'\b([A-Z])\s+([A-Z])\b', r'\1\2', text)
+    
+    # Step 15: Fix common chemical/scientific notation
+    text = re.sub(r'CO\s*2(?!\w)', 'CO2', text)  # Carbon dioxide
+    text = re.sub(r'H\s*2\s*O(?!\w)', 'H2O', text)  # Water
+    text = re.sub(r'CH\s*4(?!\w)', 'CH4', text)  # Methane
+    text = re.sub(r'N\s*2\s*O(?!\w)', 'N2O', text)  # Nitrous oxide
+    
+    # Step 16: Clean up URLs and email addresses that might be broken
+    text = re.sub(r'(https?://)\s+', r'\1', text)
+    text = re.sub(r'(\w+@)\s+(\w+)', r'\1\2', text)
+    
+    # Step 17: Final cleanup
+    text = text.strip()
+    
+    return text
+
+# Update the existing extract_text_with_unstructured function (around line 234)
+def extract_text_with_unstructured(pdf_path, min_lenght=10, max_length=10000, apply_cleaning=True):
     """
     Extracts text and metadata from a PDF file using the `partition_pdf` function.
+    Now includes general text cleaning using clean_elements().
 
     Args:
         pdf_path (str): The file path to the PDF document to be processed.
         min_lenght (int): The minimum length of elements, up to which they are always chunked, to reduce processing time.
         max_length (int): The maximum length of chunks to be extracted from each element. Larger chunks are split into smaller ones.
+        apply_cleaning (bool): Whether to apply text cleaning functions. Default: True.
 
     Returns:
         list: A list of dictionaries, where each dictionary contains:
             - "text" (str): The extracted text content from a PDF element.
             - "metadata" (dict): Metadata associated with the PDF element, if available.
+            - "original_text" (str): The original unclean text (if cleaning was applied).
     """
-    # see: https://github.com/Unstructured-IO/unstructured/blob/main/unstructured/partition/pdf.py
-    elements = partition_pdf(filename=pdf_path,
-                            #strategy='hi_res', # requires Poppler installation
-                            coordinates=True,  # return bounding box coordinates for each element extracted via OCR
-                            #infer_table_structure=True,  # infer table structure
-                            #extract_images_in_pdf=True,  # extract images in PDF
-                            languages=['eng', 'ara', 'chi', 'fre', 'rus', 'spa'],  # languages used by the United Nations
-                            #extract_image_block_types=["Image", "Table"],  # The types of elements to extract, for use in extracting image blocks as base64 encoded data stored in metadata fields
-                            )
-    elements = chunk_by_title(elements=elements,
-                                      multipage_sections = True, # Default
-                                      combine_text_under_n_chars = min_lenght, # Specifying 0 for this argument suppresses combining of small chunks
-                                      new_after_n_chars = max_length, # Specifying 0 for this argument causes each element to appear in a chunk by itself (although an element with text longer than max_characters will be still be split into two or more chunks)
-                                      max_characters = max_length # Cut off new sections after reaching a length of n chars (hard max). Default: 500
-                                      )
+    try:
+        logging.info(f"Starting text extraction from: {pdf_path}")
+        
+        # Extract elements using unstructured
+        elements = partition_pdf(
+            filename=pdf_path,
+            #strategy='hi_res', # requires Poppler installation
+            coordinates=True,  # return bounding box coordinates for each element extracted via OCR
+            #infer_table_structure=True,  # infer table structure
+            #extract_images_in_pdf=True,  # extract images in PDF
+            languages=['eng', 'ara', 'chi', 'fre', 'rus', 'spa'],  # languages used by the United Nations
+            #extract_image_block_types=["Image", "Table"],  # The types of elements to extract, for use in extracting image blocks as base64 encoded data stored in metadata fields
+        )
+        
+        logging.info(f"Extracted {len(elements)} elements from PDF")
+        
+        # Chunk the elements
+        elements = chunk_by_title(
+            elements=elements,
+            multipage_sections=True,  # Default
+            combine_text_under_n_chars=min_lenght,  # Specifying 0 for this argument suppresses combining of small chunks
+            new_after_n_chars=max_length,  # Specifying 0 for this argument causes each element to appear in a chunk by itself (although an element with text longer than max_characters will be still be split into two or more chunks)
+            max_characters=max_length  # Cut off new sections after reaching a length of n chars (hard max). Default: 500
+        )
+        
+        logging.info(f"Chunked into {len(elements)} elements")
 
-    content = []
-    for el in elements:
-        if el.text:
-            content.append({
-                "text": el.text.strip(),
-                "metadata": el.metadata.to_dict() if el.metadata else {}
-            })
-    
-    # Save content as JSON in the by-products folder
-    by_products_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'by-products')
-    os.makedirs(by_products_folder, exist_ok=True)  # Ensure the subfolder exists
-    json_path = os.path.join(by_products_folder, os.path.join(by_products_folder, f"{os.path.splitext(os.path.basename(pdf_path))[0]}_partition.json"))
-    with open(json_path, 'w', encoding='utf-8') as json_file:
-        json.dump(content, json_file, ensure_ascii=False, indent=4)
-    
-    return content
+        # Apply general cleaning using clean_elements
+        content = clean_elements(elements, apply_cleaning=apply_cleaning)
+        
+        # Save content as JSON in the by-products folder
+        by_products_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'by-products')
+        os.makedirs(by_products_folder, exist_ok=True)
+        
+        # Fix the duplicate path issue and add cleaning suffix
+        base_filename = os.path.splitext(os.path.basename(pdf_path))[0]
+        json_suffix = "_partition_cleaned.json" if apply_cleaning else "_partition_raw.json"
+        json_path = os.path.join(by_products_folder, f"{base_filename}{json_suffix}")
+        
+        with open(json_path, 'w', encoding='utf-8') as json_file:
+            json.dump(content, json_file, ensure_ascii=False, indent=4)
+        
+        logging.info(f"Saved extracted content to: {json_path}")
+        
+        return content
+        
+    except Exception as e:
+        logging.error(f"Error in extract_text_with_unstructured: {e}")
+        logging.error(f"Traceback: {traceback.format_exc()}")
+        raise
 
 def semantic_search_FAISS(text_chunks, queries, filename, embedding_model, sim_threshold=0.69, k=20, max_retries=3): 
     """
@@ -685,7 +873,7 @@ def process_document(task_id, file_path, query_terms, filename):
         logging.info(f"Quote classification completed for file: {filename} in {classification_time:.2f} seconds. Tokens used: {tokens_used}.")
         
         # Step 5: Post-process results (100%)
-        start_time = time.time()
+        pathe = time.time()
         processing_tasks[task_id]["status"] = "Finalizing results..."
         postprocess_results(file_path, classified, filename)
         processing_tasks[task_id]["progress"] = 100
