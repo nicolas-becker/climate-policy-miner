@@ -36,8 +36,6 @@ jobs:
           appSourcePath: ${{ github.workspace }}
           dockerfilePath: Dockerfile
           registryUrl: transportpolicyminer.azurecr.io
-          registryUsername: ${{ secrets.TRANSPORTPOLICYMINER_REGISTRY_USERNAME }}
-          registryPassword: ${{ secrets.TRANSPORTPOLICYMINER_REGISTRY_PASSWORD }}
           containerAppName: transport-policy-miner
           resourceGroup: ndc-tracker
           imageToBuild: transportpolicyminer.azurecr.io/transport-policy-miner:${{ github.sha }}
