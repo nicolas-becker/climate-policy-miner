@@ -34,6 +34,9 @@ COPY src/general_utils.py .
 # Create necessary directories
 RUN mkdir -p /app/data /app/results
 
+# Set the PORT environment variable
+EXPOSE ${PORT:-10000}
+
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${PORT:-10000}/health || exit 1
