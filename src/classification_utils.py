@@ -1339,7 +1339,7 @@ def tagging_classifier_quotes(quotes_dict, llm, fewshot = True):
     
     # mapping
     try:
-        output_df['target_labels'] = output_df.apply(lambda row : target_mapping_new(row), axis=1)
+        output_df['target_labels'] = output_df.apply(lambda row : target_mapping_old(row), axis=1)
         output_df['measure_labels'] = output_df.apply(lambda row : measure_mapping(row), axis=1)
     except Exception:
         logger.exception('Error while applying label mappers')
@@ -1371,7 +1371,7 @@ def type_mapping(row):
         
     return types
 
-def target_mapping(row):
+def target_mapping_old(row):
     """
     Target label attribution according to the tagging results.
 
