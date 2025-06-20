@@ -8,8 +8,8 @@ PORT=${PORT:-10000}
 exec gunicorn \
     --workers 1 \
     --bind "0.0.0.0:$PORT" \
-    --timeout 600 \
-    --keep-alive 2 \
+    --timeout 1800 \
+    --keep-alive 10 \
     --max-requests 100 \
     --worker-class sync \
     --pythonpath /app \
