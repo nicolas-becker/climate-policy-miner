@@ -28,8 +28,11 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copy source code
 COPY src/ ./src/
 
+# Create __init__.py to make src a Python package
+RUN touch src/__init__.py
+
 # Create necessary directories
-RUN mkdir -p /app/data /app/results
+RUN mkdir -p /app/data /app/results /app/uploads
 
 # Set the PORT environment variable
 EXPOSE ${PORT:-10000}
@@ -39,4 +42,12 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${PORT:-10000}/health || exit 1
 
 # Run with gunicorn
-CMD gunicorn -w 1 -b 0.0.0.0:${PORT:-10000} --timeout 600 --keep-alive 2 --max-requests 100 --worker-class sync src.flask_app:app
+CMD gunicorn \
+    --bind 0.0.0.0:10000 \
+    --workers 1 \
+    --worker-class sync \
+    --timeout 600 \
+    --keep-alive 2 \
+    --max-requests 100 \
+    --pythonpath /app \
+    src.flask_app:app
