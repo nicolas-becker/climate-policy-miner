@@ -31,6 +31,9 @@ COPY src/ ./src/
 # Create __init__.py to make src a Python package
 RUN touch src/__init__.py
 
+# Add src to Python path for absolute imports
+ENV PYTHONPATH=/app/src:/app
+
 # Create necessary directories
 RUN mkdir -p /app/data /app/results /app/uploads
 
@@ -41,13 +44,9 @@ EXPOSE ${PORT:-10000}
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${PORT:-10000}/health || exit 1
 
-# Run with gunicorn
-CMD gunicorn \
-    --bind 0.0.0.0:10000 \
-    --workers 1 \
-    --worker-class sync \
-    --timeout 600 \
-    --keep-alive 2 \
-    --max-requests 100 \
-    --pythonpath /app \
-    src.flask_app:app
+# Create entrypoint script for better signal handling
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Use exec form with entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
