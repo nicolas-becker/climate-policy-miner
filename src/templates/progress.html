@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Processing Document</title>
+    <title>Processing Document - Transport Policy Miner</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <style>
         .progress-container {
@@ -57,221 +57,243 @@
             gap: 10px;
             flex-wrap: wrap;
         }
+        .large-doc-notice { 
+        background-color: #e3f2fd; 
+        padding: 15px; 
+        border-radius: 5px; 
+        margin: 20px 0; 
+        border-left: 4px solid #2196F3;
+        }
+        .connection-status { 
+            font-size: 14px; 
+            color: #666; 
+            margin-top: 10px; 
+            text-align: center;
+        }
+        .error-details { 
+            background-color: #ffebee; 
+            padding: 15px; 
+            border-radius: 5px; 
+            margin: 20px 0; 
+            border-left: 4px solid #f44336; 
+        }
+        .partial-download { 
+            background-color: #fff3e0; 
+            padding: 15px; 
+            border-radius: 5px; 
+            margin: 10px 0; 
+        }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div class="progress-container">
-            <h2 class="text-center mb-4">⌛ Processing Document</h2>
-            <div class="progress" style="height: 25px;">
-                <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
-                     role="progressbar" style="width: 0%;" 
-                     aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
-            </div>
-            <p id="status-text" class="status-text">Starting analysis...</p>
-            
-            <div id="error-container" style="display: none;">
-                <p class="text-center mt-3 mb-3"><strong>Pipeline was interrupted due to the following error:</strong></p>
+<body class="bg-light">
+    <div class="container py-5">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h1 class="card-title text-center mb-4">🚍🌍 Transport Policy Miner 📃⛏️</h1>
                 
-                <!-- Red error box -->
-                <div class="error-message">
-                    <p id="error-text" class="mb-0"></p>
+                <div class="alert alert-info" role="alert">
+                    <h4>📄 Document Analysis in Progress</h4>
+                    <p>Your document is being analyzed. Large documents may take 10-20 minutes.</p>
+                    <p><strong>Please keep this window open.</strong></p>
                 </div>
-                
-                <!-- Error detail buttons -->
-                <div class="error-actions">
-                    <button id="toggle-traceback" class="btn btn-outline-danger btn-sm">Show Full Error Details</button>
-                    <button id="copy-error-btn" class="btn btn-outline-secondary btn-sm" onclick="copyErrorToClipboard()">
-                        📋 Copy Error Details
-                    </button>
-                </div>
-                
-                <!-- Traceback container -->
-                <div id="traceback-container" class="traceback"></div>
-                
-                <!-- Green partial results info box -->
-                <div id="partial-results-info" class="mt-3" style="display: none;">
-                    <div class="alert alert-success">
-                        <strong>Partial Results Available:</strong>
-                        <ul id="partial-results-list" class="mb-0 mt-2"></ul>
+
+                <div class="progress-container">
+                    <h2 class="text-center mb-4">⌛ Processing Document</h2>
+
+                    <div class="progress" style="height: 25px;">
+                        <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                            role="progressbar" style="width: 0%;" 
+                            aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
                     </div>
-                </div>
-                
-                <!-- Final action buttons -->
-                <div class="final-actions">
-                    <button id="download-partial-btn" class="btn btn-warning btn-sm" style="display: none;" onclick="downloadPartialResults()">
-                        📦 Download Partial Results
-                    </button>
-                    <a href="{{ url_for('index') }}" class="btn btn-primary">Return to Home</a>
+                    <p id="status-text" class="status-text">Starting analysis...</p>
+                    
+                    <div id="error-container" style="display: none;">
+                        <p class="text-center mt-3 mb-3"><strong>Pipeline was interrupted due to the following error:</strong></p>
+                        
+                        <!-- Red error box -->
+                        <div class="error-message">
+                            <p id="error-text" class="mb-0"></p>
+                        </div>
+                        
+                        <!-- Error detail buttons -->
+                        <div class="error-actions">
+                            <button id="toggle-traceback" class="btn btn-outline-danger btn-sm">Show Full Error Details</button>
+                            <button id="copy-error-btn" class="btn btn-outline-secondary btn-sm" onclick="copyErrorToClipboard()">
+                                📋 Copy Error Details
+                            </button>
+                        </div>
+                        
+                        <!-- Traceback container -->
+                        <div id="traceback-container" class="traceback"></div>
+                        
+                        <!-- Green partial results info box -->
+                        <div id="partial-results-info" class="mt-3" style="display: none;">
+                            <div class="alert alert-success">
+                                <strong>Partial Results Available:</strong>
+                                <ul id="partial-results-list" class="mb-0 mt-2"></ul>
+                            </div>
+                        </div>
+                        
+                        <!-- Final action buttons -->
+                        <div class="final-actions">
+                            <button id="download-partial-btn" class="btn btn-warning btn-sm" style="display: none;" onclick="downloadPartialResults()">
+                                📦 Download Partial Results
+                            </button>
+                            <a href="{{ url_for('index') }}" class="btn btn-primary">Return to Home</a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+        <div class="connection-status" id="connection-status">
+            Connected • Last update: <span id="last-update">--</span>
+        </div>
     </div>
-
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    
     <script>
-        // Task ID passed from Flask
-        const taskId = "{{ task_id }}";
-        let tracebackVisible = false;
-        
-        // Function to download partial results
-        function downloadPartialResults() {
-            const originalFilename = "{{ task_id }}"; // You might want to get this from the task data
-            window.location.href = `/download-partial?task_id=${taskId}&filename=${originalFilename}`;
-        }
+        const taskId = '{{ task_id }}';
+        let pollInterval = 3000;
+        let maxRetries = 50;
+        let retryCount = 0;
 
-        // Function to toggle traceback visibility
-        function toggleTraceback() {
-            const tracebackContainer = document.getElementById('traceback-container');
-            const toggleButton = document.getElementById('toggle-traceback');
-            
-            if (tracebackVisible) {
-                tracebackContainer.style.display = 'none';
-                toggleButton.textContent = 'Show Full Error Details';
-            } else {
-                tracebackContainer.style.display = 'block';
-                toggleButton.textContent = 'Hide Error Details';
-            }
-            tracebackVisible = !tracebackVisible;
-        }
-
-        // Function to copy error details to clipboard
-        function copyErrorToClipboard() {
-            const errorMessage = document.getElementById('error-text').textContent;
-            const errorTraceback = document.getElementById('traceback-container').textContent;
-            
-            const fullErrorText = `Error: ${errorMessage}\n\nTechnical Details:\n${errorTraceback}`;
-            
-            // Try to use the modern clipboard API
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(fullErrorText).then(() => {
-                    showCopyFeedback('Error details copied to clipboard!');
-                }).catch(() => {
-                    fallbackCopyToClipboard(fullErrorText);
-                });
-            } else {
-                // Fallback for older browsers or non-HTTPS
-                fallbackCopyToClipboard(fullErrorText);
-            }
-        }
-
-        function fallbackCopyToClipboard(text) {
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-999999px';
-            textArea.style.top = '-999999px';
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            
-            try {
-                document.execCommand('copy');
-                showCopyFeedback('Error details copied to clipboard!');
-            } catch (err) {
-                showCopyFeedback('Failed to copy. Please select and copy manually.');
-            }
-            
-            document.body.removeChild(textArea);
-        }
-
-        function showCopyFeedback(message) {
-            const button = document.getElementById('copy-error-btn');
-            const originalText = button.innerHTML;
-            const originalClasses = button.className;
-            
-            button.innerHTML = '✅ ' + message;
-            button.className = originalClasses + ' copy-success';
-            button.disabled = true;
-            
-            setTimeout(() => {
-                button.innerHTML = originalText;
-                button.className = originalClasses;
-                button.disabled = false;
-            }, 2000);
-        }
-        
-        // Add event listener to the toggle button
-        document.getElementById('toggle-traceback').addEventListener('click', toggleTraceback);
-        
-        // Function to update the progress bar
         function updateProgress() {
             fetch(`/api/progress/${taskId}`)
                 .then(response => {
                     if (!response.ok) {
-                        throw new Error(`Server responded with status ${response.status}`);
+                        throw new Error(`HTTP ${response.status}`);
                     }
                     return response.json();
                 })
                 .then(data => {
-                    // Update the progress bar
-                    const progressBar = document.getElementById('progress-bar');
-                    progressBar.style.width = `${data.progress}%`;
-                    progressBar.setAttribute('aria-valuenow', data.progress);
-                    progressBar.textContent = `${data.progress}%`;
+                    retryCount = 0; // Reset retry count on success
+                    updateConnectionStatus('Connected');
                     
-                    // Update the status text
-                    document.getElementById('status-text').textContent = data.status;
+                    // Update progress display with correct selectors
+                    updateProgressDisplay(data.progress, data.status || `Processing... ${data.progress}%`);
                     
-                    // If processing is complete and successful, redirect to results
-                    if (data.progress === 100 && data.redirect) {
-                        window.location.href = data.redirect;
-                    } else if (data.error) {
-                        // Show error container
-                        document.getElementById('error-container').style.display = 'block';
-                        document.getElementById('error-text').textContent = data.error;
-                        
-                        // If there's detailed traceback information, add it
-                        if (data.traceback) {
-                            document.getElementById('traceback-container').textContent = data.traceback;
-                        } else {
-                            document.getElementById('traceback-container').textContent = 
-                                'No detailed error information available. Check server logs for more details.';
-                        }
-                    
-                        // Show partial results download option if available
-                        if (data.has_partial_results) {
-                            document.getElementById('partial-results-info').style.display = 'block';
-                            document.getElementById('download-partial-btn').style.display = 'inline-block';
-                            
-                            // Show what partial results are available
-                            const partialResultsList = document.getElementById('partial-results-list');
-                            const partialResults = data.partial_results_summary || {};
-                            partialResultsList.innerHTML = '';
-                            
-                            const stepNames = {
-                                'text_extraction': 'Text extraction from PDF',
-                                'semantic_search': 'Semantic search results',
-                                'quote_extraction': 'Extracted quotes',
-                                'classification': 'Quote classification',
-                                'postprocessing': 'Final processing'
-                            };
-                            
-                            for (const [step, completed] of Object.entries(partialResults)) {
-                                if (completed) {
-                                    const li = document.createElement('li');
-                                    li.textContent = `✅ ${stepNames[step] || step}`;
-                                    li.className = 'text-success';
-                                    partialResultsList.appendChild(li);
-                                }
-                            }
-                        }
-
+                    if (data.completed && data.redirect) {
+                        // Processing complete
+                        document.getElementById('status-text').textContent = '✅ Analysis Complete! Redirecting...';
+                        setTimeout(() => {
+                            window.location.href = data.redirect;
+                        }, 2000);
+                    } else if (data.failed && data.error) {
+                        // Handle error
+                        showError(data.error, data.traceback);
                     } else {
-                        // Otherwise, continue polling
-                        setTimeout(updateProgress, 1000);
+                        // Continue polling
+                        setTimeout(updateProgress, pollInterval);
                     }
                 })
                 .catch(error => {
-                    console.error('Error fetching progress:', error);
-                    document.getElementById('status-text').textContent = 'Error checking progress: ' + error.message;
-                    document.getElementById('error-container').style.display = 'block';
-                    document.getElementById('error-text').textContent = 'Failed to communicate with the server. Please try refreshing the page or return to home.';
-                    document.getElementById('traceback-container').textContent = error.stack || error.message;
+                    console.error('Polling error:', error);
+                    retryCount++;
+                    updateConnectionStatus(`Connection issue (${retryCount} attempts)`);
+                    
+                    if (retryCount < maxRetries) {
+                        // Retry with exponential backoff
+                        const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 15000);
+                        setTimeout(updateProgress, retryDelay);
+                    } else {
+                        showError('Connection failed after multiple attempts', 'Please refresh the page to try again.');
+                    }
                 });
         }
-        
-        // Start polling for progress updates
+
+        function updateProgressDisplay(progress, status) {
+            // Update the specific progress bar by ID
+            const progressBar = document.getElementById('progress-bar');
+            if (progressBar) {
+                progressBar.style.width = progress + '%';
+                progressBar.setAttribute('aria-valuenow', progress);
+                progressBar.textContent = progress + '%';  // This fixes the 0% display issue!
+            }
+            
+            // Update the status text by ID
+            const statusText = document.getElementById('status-text');
+            if (statusText) {
+                statusText.textContent = status;
+            }
+            
+            // Update page title for user feedback
+            document.title = `${progress}% - Processing Document`;
+        }
+
+        function updateConnectionStatus(status) {
+            const connectionEl = document.getElementById('connection-status');
+            if (connectionEl) {
+                const now = new Date().toLocaleTimeString();
+                connectionEl.innerHTML = `${status} • Last update: ${now}`;
+            }
+        }
+
+        function showError(error, traceback) {
+            // Hide the progress container and show error
+            document.querySelector('.progress-container').style.display = 'none';
+            
+            // Show the existing error container
+            const errorContainer = document.getElementById('error-container');
+            const errorText = document.getElementById('error-text');
+            const tracebackContainer = document.getElementById('traceback-container');
+            
+            if (errorContainer && errorText) {
+                errorText.textContent = error;
+                if (traceback && tracebackContainer) {
+                    tracebackContainer.textContent = traceback;
+                }
+                errorContainer.style.display = 'block';
+            }
+        }
+
+        function downloadPartialResults() {
+            const filename = '{{ request.args.get("filename", "analysis") }}' || 'analysis';
+            window.location.href = `/download-partial?task_id=${taskId}&filename=${encodeURIComponent(filename)}`;
+        }
+
+        // Add the missing toggle functionality for error details
+        document.addEventListener('DOMContentLoaded', function() {
+            const toggleBtn = document.getElementById('toggle-traceback');
+            const tracebackContainer = document.getElementById('traceback-container');
+            
+            if (toggleBtn && tracebackContainer) {
+                toggleBtn.addEventListener('click', function() {
+                    if (tracebackContainer.style.display === 'none' || tracebackContainer.style.display === '') {
+                        tracebackContainer.style.display = 'block';
+                        toggleBtn.textContent = 'Hide Full Error Details';
+                    } else {
+                        tracebackContainer.style.display = 'none';
+                        toggleBtn.textContent = 'Show Full Error Details';
+                    }
+                });
+            }
+        });
+
+        // Copy error to clipboard function
+        function copyErrorToClipboard() {
+            const errorText = document.getElementById('error-text').textContent;
+            const traceback = document.getElementById('traceback-container').textContent;
+            const fullError = `Error: ${errorText}\n\nFull Details:\n${traceback}`;
+            
+            navigator.clipboard.writeText(fullError).then(() => {
+                const copyBtn = document.getElementById('copy-error-btn');
+                const originalText = copyBtn.innerHTML;
+                copyBtn.innerHTML = '✅ Copied!';
+                copyBtn.classList.add('copy-success');
+                
+                setTimeout(() => {
+                    copyBtn.innerHTML = originalText;
+                    copyBtn.classList.remove('copy-success');
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy: ', err);
+            });
+        }
+
+        // Start polling immediately
         updateProgress();
     </script>
+
 </body>
 </html>

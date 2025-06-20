@@ -41,7 +41,7 @@ RUN mkdir -p /app/data /app/results /app/uploads
 EXPOSE ${PORT:-10000}
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=60s --timeout=30s --start-period=180s --retries=5 \
     CMD curl -f http://localhost:${PORT:-10000}/health || exit 1
 
 # Create entrypoint script for better signal handling

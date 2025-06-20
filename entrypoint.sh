@@ -8,9 +8,11 @@ PORT=${PORT:-10000}
 exec gunicorn \
     --workers 1 \
     --bind "0.0.0.0:$PORT" \
-    --timeout 1800 \
-    --keep-alive 10 \
-    --max-requests 100 \
+    --timeout 3600 \
+    --keep-alive 30 \
+    --max-requests 10 \
     --worker-class sync \
-    --pythonpath /app \
+    --worker-connections 1000 \
+    --preload \
+    --chdir /app/src \
     src.flask_app:app

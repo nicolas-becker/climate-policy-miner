@@ -111,6 +111,24 @@
       // Initialize the correct state
       toggleSections();
     });
+    
+    // Enhance form submission to include filename in progress URL
+    document.querySelector('form').addEventListener('submit', function(e) {
+        // Don't prevent default - let the form submit normally
+        // Just add this to potentially help with filename passing
+        const fileInput = document.getElementById('pdf_file');
+        const urlInput = document.getElementById('pdf_url');
+        
+        // Store filename for potential use
+        if (fileInput && fileInput.files[0]) {
+            sessionStorage.setItem('uploadedFilename', fileInput.files[0].name);
+        } else if (urlInput && urlInput.value) {
+            const urlPath = urlInput.value.split('/').pop();
+            sessionStorage.setItem('uploadedFilename', urlPath || 'downloaded_document.pdf');
+        }
+    });
+</script>
+
   </script>
 </body>
 </html>

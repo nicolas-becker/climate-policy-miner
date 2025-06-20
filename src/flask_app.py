@@ -831,7 +831,7 @@ def process_document(task_id, file_path, query_terms, filename):
             "original_filename": filename,  # Store the original filename
             "partial_results": {}  # Store partial results
         }
-
+        
         # Start total runtime timer
         total_start_time = time.time()
         total_tokens_used = 0  # Initialize total token counter
@@ -908,6 +908,7 @@ def process_document(task_id, file_path, query_terms, filename):
         processing_tasks[task_id]["status"] = f"Error: {str(e)}"
         logging.error(f"Error processing document: {e}")
         logging.error(f"Traceback: {error_traceback}")
+        app.logger.error(f"Task {task_id} failed: {e}")
 
 @app.route('/health')
 def health_check():
@@ -989,7 +990,7 @@ def index():
             thread.start()
             
             # Redirect to progress page
-            return render_template('progress.html', task_id=task_id)
+            return render_template('progress.html', task_id=task_id, filename=filename)
             
         except Exception as e:
             logging.error(f"Error in index route: {e}")
@@ -1025,17 +1026,20 @@ def progress(task_id):
         task = processing_tasks[task_id]
         response = {
             "progress": task["progress"],
-            "status": task["status"],
+            "status": task.get("status", f"Processing... {task['progress']}%"),
+            "timestamp": time.time()  # Add timestamp for debugging
         }
         
         # If processing is complete, include redirect URL
-        if task["progress"] == 100 and task["error"] is None:
+        if task["progress"] == 100 and task.get("error") is None:
             response["redirect"] = url_for('results', task_id=task_id)
+            response["completed"] = True
         
         # If there was an error, include it and the traceback
-        if task["error"] is not None:
+        if task.get("error") is not None:
             response["error"] = task["error"]
-            response["traceback"] = task["traceback"]
+            response["traceback"] = task.get("traceback", "")
+            response["failed"] = True
             
             # Check if any partial results are available for download
             partial_results = task.get("partial_results", {})
@@ -1045,7 +1049,7 @@ def progress(task_id):
 
         return jsonify(response)
     else:
-        return jsonify({"error": "Task not found"}), 404
+        return jsonify({"error": "Task not found", "task_id": task_id}), 404
 
 
 @app.route('/download')
@@ -1118,6 +1122,17 @@ def download_partial_results():
         logging.error(f"Unexpected error during partial download: {e}")
         return "Internal Server Error", 500
 
+@app.route('/api/status')
+def app_status():
+    """
+    Quick status check to verify app is responsive during processing
+    """
+    return jsonify({
+        "status": "alive",
+        "timestamp": time.time(),
+        "active_tasks": len(processing_tasks),
+        "memory_info": "available"  # You can add memory monitoring here
+    })
 
 if __name__ == '__main__':
     # For Render.com, use the PORT environment variable
