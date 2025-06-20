@@ -39,15 +39,21 @@ from zipfile import ZipFile
 import io
 from langchain_community.vectorstores import Chroma
 from langchain_community.vectorstores.utils import filter_complex_metadata
-
-from quotation_utils import get_quotes
-from classification_utils import tagging_classifier_quotes
-from general_utils import create_highlighted_pdf
 import traceback
 import sys
 from unstructured.cleaners.core import clean_extra_whitespace, clean_dashes, clean_bullets
 import re
 import unicodedata
+
+try:
+    from .quotation_utils import get_quotes
+    from .classification_utils import tagging_classifier_quotes
+    from .general_utils import create_highlighted_pdf
+except ImportError:
+    # Fallback for direct execution
+    from quotation_utils import get_quotes
+    from classification_utils import tagging_classifier_quotes
+    from general_utils import create_highlighted_pdf
 
 # Initialize Flask application
 app = Flask(__name__)
