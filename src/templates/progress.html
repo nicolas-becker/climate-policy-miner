@@ -93,6 +93,7 @@
                 
                 <div class="alert alert-info" role="alert">
                     <h4>📄 Document Analysis in Progress</h4>
+                    <p class="mb-2">Document: <strong>{{ original_filename or 'Loading...' }}</strong></p>
                     <p>Your document is being analyzed. Large documents may take 10-20 minutes.</p>
                     <p><strong>Please keep this window open.</strong></p>
                 </div>
@@ -154,96 +155,211 @@
     
     <script>
         const taskId = '{{ task_id }}';
-        let pollInterval = 3000;
-        let maxRetries = 50;
+        let pollInterval = 2000; // Reduced to 2 seconds for better responsiveness
+        let heartbeatInterval = 15000; // Check app health every 15 seconds
+        let maxRetries = 100; // Increased for longer documents
         let retryCount = 0;
+        let consecutiveFailures = 0;
+        let lastSuccessfulUpdate = Date.now();
+        let heartbeatTimer;
 
         function updateProgress() {
-            fetch(`/api/progress/${taskId}`)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}`);
+            console.log(`[${new Date().toISOString()}] Polling task ${taskId}...`);
+            
+            fetch(`/api/progress/${taskId}`, {
+                method: 'GET',
+                headers: { 
+                    'Cache-Control': 'no-cache',
+                    'Accept': 'application/json'
+                },
+                timeout: 10000  // 10 second timeout for polling requests
+            })
+            .then(response => {
+                console.log(`[${new Date().toISOString()}] Response status: ${response.status}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log(`[${new Date().toISOString()}] Progress data:`, data);
+                
+                // Reset failure counters on success
+                retryCount = 0;
+                consecutiveFailures = 0;
+                lastSuccessfulUpdate = Date.now();
+                
+                updateConnectionStatus('Connected');
+                
+                // Update document name if available and not already set
+                if (data.original_filename && !document.querySelector('.document-name-set')) {
+                    const alertInfo = document.querySelector('.alert-info h4');
+                    if (alertInfo && alertInfo.nextElementSibling) {
+                        // Add document name after the heading
+                        const docNameP = document.createElement('p');
+                        docNameP.className = 'mb-2 document-name-set';
+                        docNameP.innerHTML = `Document: <strong>${data.original_filename}</strong>`;
+                        alertInfo.parentNode.insertBefore(docNameP, alertInfo.nextElementSibling);
                     }
-                    return response.json();
-                })
-                .then(data => {
-                    retryCount = 0; // Reset retry count on success
-                    updateConnectionStatus('Connected');
-                    
-                    // Update progress display with correct selectors
-                    updateProgressDisplay(data.progress, data.status || `Processing... ${data.progress}%`);
-                    
-                    if (data.completed && data.redirect) {
-                        // Processing complete
-                        document.getElementById('status-text').textContent = '✅ Analysis Complete! Redirecting...';
-                        setTimeout(() => {
-                            window.location.href = data.redirect;
-                        }, 2000);
-                    } else if (data.failed && data.error) {
-                        // Handle error
-                        showError(data.error, data.traceback);
-                    } else {
-                        // Continue polling
-                        setTimeout(updateProgress, pollInterval);
-                    }
-                })
-                .catch(error => {
-                    console.error('Polling error:', error);
-                    retryCount++;
-                    updateConnectionStatus(`Connection issue (${retryCount} attempts)`);
-                    
-                    if (retryCount < maxRetries) {
-                        // Retry with exponential backoff
-                        const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 15000);
-                        setTimeout(updateProgress, retryDelay);
-                    } else {
-                        showError('Connection failed after multiple attempts', 'Please refresh the page to try again.');
-                    }
-                });
+                }
+
+                // Validate data structure
+                if (typeof data.progress === 'undefined') {
+                    throw new Error('Invalid progress data received');
+                }
+                
+                // Update progress display
+                updateProgressDisplay(data.progress, data.status || `Processing... ${data.progress}%`);
+                
+                if (data.completed && data.redirect) {
+                    // Processing complete
+                    console.log('[SUCCESS] Processing completed, redirecting...');
+                    document.getElementById('status-text').textContent = '✅ Analysis Complete! Redirecting...';
+                    setTimeout(() => {
+                        window.location.href = data.redirect;
+                    }, 2000);
+                } else if (data.failed && data.error) {
+                    // Handle error
+                    console.log('[ERROR] Processing failed:', data.error);
+                    showError(data.error, data.traceback);
+                } else {
+                    // Continue polling
+                    setTimeout(updateProgress, pollInterval);
+                }
+            })
+            .catch(error => {
+                consecutiveFailures++;
+                retryCount++;
+                
+                console.error(`[${new Date().toISOString()}] Polling error (attempt ${retryCount}):`, error);
+                
+                updateConnectionStatus(`Connection issue (${consecutiveFailures} failures)`);
+                
+                // Check if the app might have crashed
+                const timeSinceLastSuccess = Date.now() - lastSuccessfulUpdate;
+                if (timeSinceLastSuccess > 60000) { // 1 minute without success
+                    console.warn('[WARNING] No successful updates for over 1 minute - checking app status...');
+                    checkAppHealth();
+                }
+                
+                if (retryCount < maxRetries) {
+                    // Exponential backoff with max delay
+                    const retryDelay = Math.min(1000 * Math.pow(1.5, retryCount), 15000);
+                    console.log(`[RETRY] Retrying in ${retryDelay}ms...`);
+                    setTimeout(updateProgress, retryDelay);
+                } else {
+                    console.error('[FATAL] Max retries exceeded');
+                    showError('Connection failed after multiple attempts', 
+                             'The application may have crashed or become unresponsive. Please try refreshing the page.');
+                }
+            });
+        }
+
+        function checkAppHealth() {
+            console.log('[HEALTH CHECK] Checking if app is still responsive...');
+            
+            fetch('/api/status', {
+                method: 'GET',
+                headers: { 'Cache-Control': 'no-cache' },
+                timeout: 5000
+            })
+            .then(response => {
+                if (response.ok) {
+                    console.log('[HEALTH CHECK] App is responsive, but task may have failed');
+                    // App is alive, but task might be stuck/crashed
+                    showError('Processing appears to have stopped', 
+                             'The application is running but your document processing has stopped responding. This may be due to memory limits or processing complexity.');
+                } else {
+                    throw new Error(`Health check failed: ${response.status}`);
+                }
+            })
+            .catch(error => {
+                console.error('[HEALTH CHECK] App appears to be down:', error);
+                showError('Application has stopped responding', 
+                         'The application appears to have crashed. Please try refreshing the page and processing a smaller document.');
+            });
         }
 
         function updateProgressDisplay(progress, status) {
-            // Update the specific progress bar by ID
-            const progressBar = document.getElementById('progress-bar');
-            if (progressBar) {
-                progressBar.style.width = progress + '%';
-                progressBar.setAttribute('aria-valuenow', progress);
-                progressBar.textContent = progress + '%';  // This fixes the 0% display issue!
+            try {
+                // Update the progress bar
+                const progressBar = document.getElementById('progress-bar');
+                if (progressBar) {
+                    progressBar.style.width = progress + '%';
+                    progressBar.setAttribute('aria-valuenow', progress);
+                    progressBar.textContent = progress + '%';
+                } else {
+                    console.warn('[WARNING] Progress bar element not found');
+                }
+                
+                // Update the status text
+                const statusText = document.getElementById('status-text');
+                if (statusText) {
+                    statusText.textContent = status;
+                } else {
+                    console.warn('[WARNING] Status text element not found');
+                }
+                
+                // Update page title
+                document.title = `${progress}% - Processing Document`;
+                
+                console.log(`[PROGRESS] ${progress}% - ${status}`);
+            } catch (error) {
+                console.error('[ERROR] Failed to update progress display:', error);
             }
-            
-            // Update the status text by ID
-            const statusText = document.getElementById('status-text');
-            if (statusText) {
-                statusText.textContent = status;
-            }
-            
-            // Update page title for user feedback
-            document.title = `${progress}% - Processing Document`;
         }
 
         function updateConnectionStatus(status) {
-            const connectionEl = document.getElementById('connection-status');
-            if (connectionEl) {
-                const now = new Date().toLocaleTimeString();
-                connectionEl.innerHTML = `${status} • Last update: ${now}`;
+            try {
+                const connectionEl = document.getElementById('connection-status');
+                if (connectionEl) {
+                    const now = new Date().toLocaleTimeString();
+                    connectionEl.innerHTML = `${status} • Last update: ${now}`;
+                }
+            } catch (error) {
+                console.error('[ERROR] Failed to update connection status:', error);
             }
         }
 
         function showError(error, traceback) {
-            // Hide the progress container and show error
-            document.querySelector('.progress-container').style.display = 'none';
+            console.error('[SHOW ERROR]', error, traceback);
             
-            // Show the existing error container
-            const errorContainer = document.getElementById('error-container');
-            const errorText = document.getElementById('error-text');
-            const tracebackContainer = document.getElementById('traceback-container');
-            
-            if (errorContainer && errorText) {
-                errorText.textContent = error;
-                if (traceback && tracebackContainer) {
-                    tracebackContainer.textContent = traceback;
+            try {
+                // Hide the progress container
+                const progressContainer = document.querySelector('.progress-container');
+                if (progressContainer) {
+                    progressContainer.style.display = 'none';
                 }
-                errorContainer.style.display = 'block';
+                
+                // Show error details
+                const errorContainer = document.getElementById('error-container');
+                const errorText = document.getElementById('error-text');
+                const tracebackContainer = document.getElementById('traceback-container');
+                
+                if (errorContainer && errorText) {
+                    errorText.textContent = error;
+                    if (traceback && tracebackContainer) {
+                        tracebackContainer.textContent = traceback;
+                    }
+                    errorContainer.style.display = 'block';
+                } else {
+                    // Fallback error display if error container is missing
+                    document.body.insertAdjacentHTML('beforeend', `
+                        <div class="alert alert-danger" role="alert" style="margin: 20px;">
+                            <h4>❌ Processing Error</h4>
+                            <p><strong>Error:</strong> ${error}</p>
+                            <details>
+                                <summary>Technical Details</summary>
+                                <pre>${traceback || 'No additional details available'}</pre>
+                            </details>
+                            <button class="btn btn-primary mt-2" onclick="window.location.href='/'">← Return to Home</button>
+                        </div>
+                    `);
+                }
+            } catch (displayError) {
+                console.error('[CRITICAL] Failed to display error:', displayError);
+                alert(`Processing Error: ${error}\n\nPlease refresh the page and try again.`);
             }
         }
 
@@ -252,46 +368,17 @@
             window.location.href = `/download-partial?task_id=${taskId}&filename=${encodeURIComponent(filename)}`;
         }
 
-        // Add the missing toggle functionality for error details
-        document.addEventListener('DOMContentLoaded', function() {
-            const toggleBtn = document.getElementById('toggle-traceback');
-            const tracebackContainer = document.getElementById('traceback-container');
-            
-            if (toggleBtn && tracebackContainer) {
-                toggleBtn.addEventListener('click', function() {
-                    if (tracebackContainer.style.display === 'none' || tracebackContainer.style.display === '') {
-                        tracebackContainer.style.display = 'block';
-                        toggleBtn.textContent = 'Hide Full Error Details';
-                    } else {
-                        tracebackContainer.style.display = 'none';
-                        toggleBtn.textContent = 'Show Full Error Details';
-                    }
-                });
+        // Add periodic health checks for long-running tasks
+        setInterval(() => {
+            const timeSinceLastSuccess = Date.now() - lastSuccessfulUpdate;
+            if (timeSinceLastSuccess > 120000) { // 2 minutes without updates
+                console.warn('[WATCHDOG] No updates for 2+ minutes, performing health check...');
+                checkAppHealth();
             }
-        });
-
-        // Copy error to clipboard function
-        function copyErrorToClipboard() {
-            const errorText = document.getElementById('error-text').textContent;
-            const traceback = document.getElementById('traceback-container').textContent;
-            const fullError = `Error: ${errorText}\n\nFull Details:\n${traceback}`;
-            
-            navigator.clipboard.writeText(fullError).then(() => {
-                const copyBtn = document.getElementById('copy-error-btn');
-                const originalText = copyBtn.innerHTML;
-                copyBtn.innerHTML = '✅ Copied!';
-                copyBtn.classList.add('copy-success');
-                
-                setTimeout(() => {
-                    copyBtn.innerHTML = originalText;
-                    copyBtn.classList.remove('copy-success');
-                }, 2000);
-            }).catch(err => {
-                console.error('Failed to copy: ', err);
-            });
-        }
+        }, 30000); // Check every 30 seconds
 
         // Start polling immediately
+        console.log('[INIT] Starting progress polling...');
         updateProgress();
     </script>
 

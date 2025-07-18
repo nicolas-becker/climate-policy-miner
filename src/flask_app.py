@@ -44,6 +44,8 @@ import sys
 from unstructured.cleaners.core import clean_extra_whitespace, clean_dashes, clean_bullets
 import re
 import unicodedata
+import gc
+import psutil
 
 try:
     from .quotation_utils import get_quotes
@@ -829,60 +831,107 @@ def process_document(task_id, file_path, query_terms, filename):
             "error": None,
             "traceback": None,
             "original_filename": filename,  # Store the original filename
-            "partial_results": {}  # Store partial results
+            "partial_results": {},  # Store partial results,
+            "last_heartbeat": time.time()  # Add heartbeat timestamp
         }
         
         # Start total runtime timer
         total_start_time = time.time()
         total_tokens_used = 0  # Initialize total token counter
         
+        # Step 0: Initialize task
+        processing_tasks[task_id]["status"] = "Starting text extraction..."
+        processing_tasks[task_id]["progress"] = 5
+        processing_tasks[task_id]["last_heartbeat"] = time.time()  # Add heartbeat timestamp
+
+        # Simulate progress during long operations
+        processing_tasks[task_id]["status"] = "Analyzing document structure..."
+        processing_tasks[task_id]["progress"] = 10
+        processing_tasks[task_id]["last_heartbeat"] = time.time()
+
         # Step 1: Extract text with Unstructured (20%)
         start_time = time.time()
         processing_tasks[task_id]["status"] = "Extracting text from document..."
         unstructured_text = extract_text_with_unstructured(file_path)
         processing_tasks[task_id]["progress"] = 20
+        processing_tasks[task_id]["status"] = "Text extraction completed."
+        processing_tasks[task_id]["last_heartbeat"] = time.time()
         processing_tasks[task_id]["partial_results"]["text_extraction"] = True  # Mark as completed
         preprocessing_time = time.time() - start_time
         logging.info(f"Text extraction completed for file: {filename} in {preprocessing_time:.2f} seconds.")
         
+        # Memory cleanup
+        gc.collect()
+
         # Step 2: Perform semantic search (40%)
         start_time = time.time()
+        processing_tasks[task_id]["status"] = "Preparing semantic search..."
+        processing_tasks[task_id]["progress"] = 25
+        processing_tasks[task_id]["last_heartbeat"] = time.time()
+
         processing_tasks[task_id]["status"] = "Performing semantic search..."
+        processing_tasks[task_id]["last_heartbeat"] = time.time()
         chunks = semantic_search_FAISS(unstructured_text, query_terms, 
                                       os.path.splitext(os.path.basename(file_path))[0],
                                       embedding_model=EMBEDDING)
-        processing_tasks[task_id]["progress"] = 40
+        processing_tasks[task_id]["progress"] = 30
+        processing_tasks[task_id]["status"] = "Semantic search completed."
+        processing_tasks[task_id]["last_heartbeat"] = time.time()
         processing_tasks[task_id]["partial_results"]["semantic_search"] = True  # Mark as completed
         retrieval_time = time.time() - start_time
         logging.info(f"Semantic search completed for file: {filename} in {retrieval_time:.2f} seconds.")
         
+        # Memory cleanup
+        gc.collect()
+
         # Step 3: Extract quotes (60%)
         start_time = time.time()
         processing_tasks[task_id]["status"] = "Extracting quotes from relevant sections..."
+        processing_tasks[task_id]["progress"] = 40
+        processing_tasks[task_id]["last_heartbeat"] = time.time()
         citations, tokens_used = extract_quotes(chunks, os.path.basename(file_path))
         total_tokens_used += tokens_used  # Update total tokens used
         processing_tasks[task_id]["progress"] = 60
+        processing_tasks[task_id]["status"] = "Quote extraction completed."
+        processing_tasks[task_id]["last_heartbeat"] = time.time()
         processing_tasks[task_id]["partial_results"]["quote_extraction"] = True  # Mark as completed
         quotation_time = time.time() - start_time
         logging.info(f"Quote extraction completed for file: {filename} in {quotation_time:.2f} seconds. Tokens used: {tokens_used}.")
         
+        # Memory cleanup
+        gc.collect()
+
         # Step 4: Classify quotes (80%)
         start_time = time.time()
+        processing_tasks[task_id]["status"] = "Preparing AI classification..."
+        processing_tasks[task_id]["progress"] = 65
+        processing_tasks[task_id]["last_heartbeat"] = time.time()
         processing_tasks[task_id]["status"] = "Classifying extracted quotes..."
+        processing_tasks[task_id]["progress"] = 70
+        processing_tasks[task_id]["last_heartbeat"] = time.time()
         with get_openai_callback() as cb:
             classified = classify_quotes(citations, file_path)
             tokens_used = cb.total_tokens
             total_tokens_used += tokens_used  # Update total tokens used
         processing_tasks[task_id]["progress"] = 80
+        processing_tasks[task_id]["status"] = "AI classification completed."
+        processing_tasks[task_id]["last_heartbeat"] = time.time()
         processing_tasks[task_id]["partial_results"]["classification"] = True  # Mark as completed
         classification_time = time.time() - start_time
         logging.info(f"Quote classification completed for file: {filename} in {classification_time:.2f} seconds. Tokens used: {tokens_used}.")
-        
+
+        # Memory cleanup
+        gc.collect()
+
         # Step 5: Post-process results (100%)
         pathe = time.time()
         processing_tasks[task_id]["status"] = "Finalizing results..."
+        processing_tasks[task_id]["progress"] = 90
+        processing_tasks[task_id]["last_heartbeat"] = time.time()
         postprocess_results(file_path, classified, filename)
         processing_tasks[task_id]["progress"] = 100
+        processing_tasks[task_id]["status"] = "Analysis complete"
+        processing_tasks[task_id]["last_heartbeat"] = time.time()
         processing_tasks[task_id]["partial_results"]["postprocessing"] = True  # Mark as completed
         postprocessing_time = time.time() - start_time
         logging.info(f"Post-processing completed for task_id: {task_id}, file: {filename} in {postprocessing_time:.2f} seconds.")
@@ -990,7 +1039,7 @@ def index():
             thread.start()
             
             # Redirect to progress page
-            return render_template('progress.html', task_id=task_id, filename=filename)
+            return render_template('progress.html', task_id=task_id, original_filename=filename)
             
         except Exception as e:
             logging.error(f"Error in index route: {e}")
@@ -1017,6 +1066,32 @@ def results(task_id):
         # If task doesn't exist or isn't complete, redirect to progress
         return render_template('progress.html', task_id=task_id)
 
+@app.route('/api/heartbeat')
+def heartbeat():
+    """Lightweight heartbeat endpoint for Azure health checks"""
+    return jsonify({
+        "status": "alive",
+        "timestamp": time.time(),
+        "active_tasks": len(processing_tasks),
+        "memory_mb": psutil.Process().memory_info().rss / 1024 / 1024
+    })
+
+@app.route('/api/detailed_status/<task_id>')
+def detailed_task_status(task_id):
+    """Detailed status for specific task"""
+    if task_id in processing_tasks:
+        task = processing_tasks[task_id]
+        return jsonify({
+            "task_id": task_id,
+            "progress": task.get("progress", 0),
+            "status": task.get("status", "Unknown"),
+            "error": task.get("error"),
+            "has_partial_results": task.get("has_partial_results", False),
+            "memory_usage": psutil.Process().memory_info().rss / 1024 / 1024,
+            "last_update": time.time()
+        })
+    return jsonify({"error": "Task not found"}), 404
+
 @app.route('/api/progress/<task_id>')
 def progress(task_id):
     """
@@ -1025,9 +1100,10 @@ def progress(task_id):
     if task_id in processing_tasks:
         task = processing_tasks[task_id]
         response = {
-            "progress": task["progress"],
-            "status": task.get("status", f"Processing... {task['progress']}%"),
-            "timestamp": time.time()  # Add timestamp for debugging
+            "progress": task.get("progress", 0),
+            "status": task.get("status", f"Processing... {task.get('progress', 0)}%"),
+            "timestamp": time.time(),  # Add timestamp for debugging
+            "memory_usage": psutil.Process().memory_info().rss / 1024 / 1024,  # Add memory info
         }
         
         # If processing is complete, include redirect URL
