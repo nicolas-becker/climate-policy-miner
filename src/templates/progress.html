@@ -155,27 +155,26 @@
     
     <script>
         const taskId = '{{ task_id }}';
-        let pollInterval = 2000; // Reduced to 2 seconds for better responsiveness
-        let heartbeatInterval = 15000; // Check app health every 15 seconds
-        let maxRetries = 100; // Increased for longer documents
+        let pollInterval = 2000;
+        let maxRetries = 20;
         let retryCount = 0;
         let consecutiveFailures = 0;
         let lastSuccessfulUpdate = Date.now();
-        let heartbeatTimer;
+        let isShowingError = false;
 
         function updateProgress() {
-            console.log(`[${new Date().toISOString()}] Polling task ${taskId}...`);
+            const timestamp = new Date().toISOString();
+            logToUser(`[${timestamp}] Checking progress...`);
             
             fetch(`/api/progress/${taskId}`, {
                 method: 'GET',
                 headers: { 
                     'Cache-Control': 'no-cache',
                     'Accept': 'application/json'
-                },
-                timeout: 10000  // 10 second timeout for polling requests
+                }
             })
             .then(response => {
-                console.log(`[${new Date().toISOString()}] Response status: ${response.status}`);
+                logToUser(`[${timestamp}] Server responded with status: ${response.status}`);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -183,46 +182,37 @@
                 return response.json();
             })
             .then(data => {
-                console.log(`[${new Date().toISOString()}] Progress data:`, data);
+                logToUser(`[${timestamp}] Received progress: ${data.progress}% - ${data.status}`);
                 
                 // Reset failure counters on success
                 retryCount = 0;
                 consecutiveFailures = 0;
                 lastSuccessfulUpdate = Date.now();
                 
-                updateConnectionStatus('Connected');
+                // Hide any error displays and show progress again
+                hideErrorDisplay();
+                showProgressDisplay();
                 
-                // Update document name if available and not already set
-                if (data.original_filename && !document.querySelector('.document-name-set')) {
-                    const alertInfo = document.querySelector('.alert-info h4');
-                    if (alertInfo && alertInfo.nextElementSibling) {
-                        // Add document name after the heading
-                        const docNameP = document.createElement('p');
-                        docNameP.className = 'mb-2 document-name-set';
-                        docNameP.innerHTML = `Document: <strong>${data.original_filename}</strong>`;
-                        alertInfo.parentNode.insertBefore(docNameP, alertInfo.nextElementSibling);
-                    }
-                }
-
+                updateConnectionStatus('✅ Connected and receiving updates');
+                
                 // Validate data structure
                 if (typeof data.progress === 'undefined') {
-                    throw new Error('Invalid progress data received');
+                    throw new Error('Invalid progress data received from server');
                 }
                 
                 // Update progress display
                 updateProgressDisplay(data.progress, data.status || `Processing... ${data.progress}%`);
                 
                 if (data.completed && data.redirect) {
-                    // Processing complete
-                    console.log('[SUCCESS] Processing completed, redirecting...');
+                    logToUser('[SUCCESS] Processing completed successfully! Redirecting to results...');
                     document.getElementById('status-text').textContent = '✅ Analysis Complete! Redirecting...';
+                    hideInfoBanner();
                     setTimeout(() => {
                         window.location.href = data.redirect;
                     }, 2000);
                 } else if (data.failed && data.error) {
-                    // Handle error
-                    console.log('[ERROR] Processing failed:', data.error);
-                    showError(data.error, data.traceback);
+                    logToUser(`[ERROR] Processing failed: ${data.error}`);
+                    showProcessingError(data.error, data.traceback, data.has_partial_results);
                 } else {
                     // Continue polling
                     setTimeout(updateProgress, pollInterval);
@@ -232,81 +222,252 @@
                 consecutiveFailures++;
                 retryCount++;
                 
-                console.error(`[${new Date().toISOString()}] Polling error (attempt ${retryCount}):`, error);
+                const errorMsg = `Connection attempt ${retryCount}/${maxRetries} failed: ${error.message}`;
+                logToUser(`[ERROR] ${errorMsg}`);
                 
-                updateConnectionStatus(`Connection issue (${consecutiveFailures} failures)`);
-                
-                // Check if the app might have crashed
-                const timeSinceLastSuccess = Date.now() - lastSuccessfulUpdate;
-                if (timeSinceLastSuccess > 60000) { // 1 minute without success
-                    console.warn('[WARNING] No successful updates for over 1 minute - checking app status...');
-                    checkAppHealth();
+                // Update connection status with specific error type
+                if (error.message.includes('Failed to fetch')) {
+                    updateConnectionStatus(`❌ Network connection lost (${consecutiveFailures} failures)`);
+                    showConnectionError('network');
+                } else if (error.message.includes('timeout')) {
+                    updateConnectionStatus(`⏰ Server not responding (${consecutiveFailures} timeouts)`);
+                    showConnectionError('timeout');
+                } else {
+                    updateConnectionStatus(`⚠️ Connection error (${consecutiveFailures} failures)`);
+                    showConnectionError('general');
                 }
                 
-                if (retryCount < maxRetries) {
-                    // Exponential backoff with max delay
-                    const retryDelay = Math.min(1000 * Math.pow(1.5, retryCount), 15000);
-                    console.log(`[RETRY] Retrying in ${retryDelay}ms...`);
-                    setTimeout(updateProgress, retryDelay);
+                // Check if we should give up
+                if (retryCount >= maxRetries) {
+                    logToUser(`[CRITICAL] Giving up after ${maxRetries} failed attempts`);
+                    showCriticalError();
                 } else {
-                    console.error('[FATAL] Max retries exceeded');
-                    showError('Connection failed after multiple attempts', 
-                             'The application may have crashed or become unresponsive. Please try refreshing the page.');
+                    const retryDelay = Math.min(1000 * Math.pow(1.5, retryCount), 15000);
+                    logToUser(`[RETRY] Will retry in ${(retryDelay/1000).toFixed(1)} seconds...`);
+                    setTimeout(updateProgress, retryDelay);
                 }
             });
         }
 
-        function checkAppHealth() {
-            console.log('[HEALTH CHECK] Checking if app is still responsive...');
+        function showProgressDisplay() {
+            const progressContainer = document.querySelector('.progress-container');
+            const infoBanner = document.querySelector('.alert-info');
             
-            fetch('/api/status', {
-                method: 'GET',
-                headers: { 'Cache-Control': 'no-cache' },
-                timeout: 5000
-            })
-            .then(response => {
-                if (response.ok) {
-                    console.log('[HEALTH CHECK] App is responsive, but task may have failed');
-                    // App is alive, but task might be stuck/crashed
-                    showError('Processing appears to have stopped', 
-                             'The application is running but your document processing has stopped responding. This may be due to memory limits or processing complexity.');
-                } else {
-                    throw new Error(`Health check failed: ${response.status}`);
+            if (progressContainer) progressContainer.style.display = 'block';
+            if (infoBanner) infoBanner.style.display = 'block';
+            
+            // Hide error container
+            const errorContainer = document.getElementById('error-container');
+            if (errorContainer) errorContainer.style.display = 'none';
+            
+            isShowingError = false;
+        }
+
+        function hideErrorDisplay() {
+            const errorContainer = document.getElementById('error-container');
+            if (errorContainer) errorContainer.style.display = 'none';
+            isShowingError = false;
+        }
+
+        function hideInfoBanner() {
+            const infoBanner = document.querySelector('.alert-info');
+            if (infoBanner) {
+                infoBanner.style.display = 'none';
+            }
+        }
+
+        function showConnectionError(errorType) {
+            if (isShowingError) return; // Don't spam error messages
+            
+            const progressContainer = document.querySelector('.progress-container');
+            const infoBanner = document.querySelector('.alert-info');
+            
+            // Hide progress and info banner
+            if (progressContainer) progressContainer.style.display = 'none';
+            if (infoBanner) infoBanner.style.display = 'none';
+            
+            let errorTitle, errorMessage, suggestions;
+            
+            switch(errorType) {
+                case 'network':
+                    errorTitle = "🌐 Network Connection Lost";
+                    errorMessage = "Cannot reach the server. Your internet connection may be unstable.";
+                    suggestions = [
+                        "Check your internet connection",
+                        "Refresh the page to restart",
+                        "Contact support if this persists"
+                    ];
+                    break;
+                case 'timeout':
+                    errorTitle = "⏰ Server Not Responding";
+                    errorMessage = "The server is taking too long to respond. It may be overloaded or processing a very large document.";
+                    suggestions = [
+                        "Wait a few more minutes - the process might still be running",
+                        "Try refreshing to check current status",
+                        "Consider using a smaller document if this persists"
+                    ];
+                    break;
+                default:
+                    errorTitle = "⚠️ Connection Problems";
+                    errorMessage = "Having trouble communicating with the server.";
+                    suggestions = [
+                        "This might be temporary",
+                        "We'll keep trying automatically",
+                        "Check the console log below for details"
+                    ];
+            }
+            
+            showErrorMessage(errorTitle, errorMessage, suggestions, false);
+        }
+
+        function showProcessingError(error, traceback, hasPartialResults) {
+            hideInfoBanner();
+            
+            const errorTitle = "❌ Document Processing Failed";
+            const errorMessage = `Processing was interrupted: ${error}`;
+            const suggestions = [
+                "Try processing a smaller document",
+                "Check if your document is corrupted",
+                "Contact support with the error details below"
+            ];
+            
+            showErrorMessage(errorTitle, errorMessage, suggestions, true, traceback, hasPartialResults);
+        }
+
+        function showCriticalError() {
+            hideInfoBanner();
+            
+            const errorTitle = "🚨 Connection Failed Completely";
+            const errorMessage = "Cannot establish connection to the server after multiple attempts.";
+            const suggestions = [
+                "The application may have crashed",
+                "Your document might be too large to process",
+                "Try refreshing the page and using a smaller document",
+                "Contact support if this problem persists"
+            ];
+            
+            showErrorMessage(errorTitle, errorMessage, suggestions, true);
+        }
+
+        function showErrorMessage(title, message, suggestions, isProcessingError, traceback = null, hasPartialResults = false) {
+            isShowingError = true;
+            
+            // Hide progress container
+            const progressContainer = document.querySelector('.progress-container');
+            if (progressContainer) progressContainer.style.display = 'none';
+            
+            // Show or create error container
+            let errorContainer = document.getElementById('error-container');
+            if (!errorContainer) {
+                errorContainer = document.createElement('div');
+                errorContainer.id = 'error-container';
+                errorContainer.className = 'mt-4';
+                
+                // Insert after progress container or at end of card body
+                const cardBody = document.querySelector('.card-body');
+                const progressContainer = document.querySelector('.progress-container');
+                
+                if (progressContainer && progressContainer.parentNode) {
+                    progressContainer.parentNode.insertBefore(errorContainer, progressContainer.nextSibling);
+                } else if (cardBody) {
+                    cardBody.appendChild(errorContainer);
                 }
-            })
-            .catch(error => {
-                console.error('[HEALTH CHECK] App appears to be down:', error);
-                showError('Application has stopped responding', 
-                         'The application appears to have crashed. Please try refreshing the page and processing a smaller document.');
-            });
+            }
+            
+            // Update error content
+            const errorHtml = `
+                <div class="alert alert-danger" role="alert">
+                    <h4>${title}</h4>
+                    <p><strong>${message}</strong></p>
+                    
+                    <h6 class="mt-3">What you can do:</h6>
+                    <ul>
+                        ${suggestions.map(suggestion => `<li>${suggestion}</li>`).join('')}
+                    </ul>
+                    
+                    ${hasPartialResults ? `
+                        <div class="alert alert-warning mt-3">
+                            <strong>📦 Partial Results Available</strong><br>
+                            Some processing steps completed before the error. You can download what was processed.
+                        </div>
+                    ` : ''}
+                    
+                    <div class="mt-3">
+                        <h6>🔍 Live Console Log:</h6>
+                        <div id="console-log" style="background: #f8f9fa; padding: 10px; border-radius: 4px; max-height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; border: 1px solid #dee2e6; white-space: pre-wrap;">
+                            ${getConsoleLog()}
+                        </div>
+                    </div>
+                    
+                    ${traceback ? `
+                        <details class="mt-3">
+                            <summary><strong>Full Error Details</strong></summary>
+                            <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 12px; max-height: 300px; overflow-y: auto; white-space: pre-wrap;">${traceback}</pre>
+                        </details>
+                    ` : ''}
+                    
+                    <div class="mt-4 text-center">
+                        ${hasPartialResults ? `
+                            <button class="btn btn-warning me-2" onclick="downloadPartialResults()">
+                                📦 Download Partial Results
+                            </button>
+                        ` : ''}
+                        <button class="btn btn-outline-primary me-2" onclick="location.reload()">
+                            🔄 Refresh Page
+                        </button>
+                        <a href="/" class="btn btn-primary">
+                            🏠 Return to Home
+                        </a>
+                    </div>
+                </div>
+            `;
+            
+            errorContainer.innerHTML = errorHtml;
+            errorContainer.style.display = 'block';
+        }
+
+        // Console logging for user visibility
+        let consoleLog = [];
+        function logToUser(message) {
+            console.log(message); // Still log to browser console
+            
+            const timestamp = new Date().toLocaleTimeString();
+            consoleLog.push(`[${timestamp}] ${message}`);
+            
+            // Keep only last 25 messages
+            if (consoleLog.length > 25) {
+                consoleLog.shift();
+            }
+            
+            // Update console display if it's visible
+            const consoleDiv = document.getElementById('console-log');
+            if (consoleDiv) {
+                consoleDiv.textContent = consoleLog.join('\n');
+                consoleDiv.scrollTop = consoleDiv.scrollHeight; // Auto-scroll to bottom
+            }
+        }
+
+        function getConsoleLog() {
+            return consoleLog.join('\n') || 'No log entries yet...';
         }
 
         function updateProgressDisplay(progress, status) {
             try {
-                // Update the progress bar
                 const progressBar = document.getElementById('progress-bar');
                 if (progressBar) {
                     progressBar.style.width = progress + '%';
                     progressBar.setAttribute('aria-valuenow', progress);
                     progressBar.textContent = progress + '%';
-                } else {
-                    console.warn('[WARNING] Progress bar element not found');
                 }
                 
-                // Update the status text
                 const statusText = document.getElementById('status-text');
                 if (statusText) {
                     statusText.textContent = status;
-                } else {
-                    console.warn('[WARNING] Status text element not found');
                 }
                 
-                // Update page title
                 document.title = `${progress}% - Processing Document`;
-                
-                console.log(`[PROGRESS] ${progress}% - ${status}`);
             } catch (error) {
-                console.error('[ERROR] Failed to update progress display:', error);
+                logToUser(`ERROR: Failed to update progress display: ${error.message}`);
             }
         }
 
@@ -318,67 +479,32 @@
                     connectionEl.innerHTML = `${status} • Last update: ${now}`;
                 }
             } catch (error) {
-                console.error('[ERROR] Failed to update connection status:', error);
-            }
-        }
-
-        function showError(error, traceback) {
-            console.error('[SHOW ERROR]', error, traceback);
-            
-            try {
-                // Hide the progress container
-                const progressContainer = document.querySelector('.progress-container');
-                if (progressContainer) {
-                    progressContainer.style.display = 'none';
-                }
-                
-                // Show error details
-                const errorContainer = document.getElementById('error-container');
-                const errorText = document.getElementById('error-text');
-                const tracebackContainer = document.getElementById('traceback-container');
-                
-                if (errorContainer && errorText) {
-                    errorText.textContent = error;
-                    if (traceback && tracebackContainer) {
-                        tracebackContainer.textContent = traceback;
-                    }
-                    errorContainer.style.display = 'block';
-                } else {
-                    // Fallback error display if error container is missing
-                    document.body.insertAdjacentHTML('beforeend', `
-                        <div class="alert alert-danger" role="alert" style="margin: 20px;">
-                            <h4>❌ Processing Error</h4>
-                            <p><strong>Error:</strong> ${error}</p>
-                            <details>
-                                <summary>Technical Details</summary>
-                                <pre>${traceback || 'No additional details available'}</pre>
-                            </details>
-                            <button class="btn btn-primary mt-2" onclick="window.location.href='/'">← Return to Home</button>
-                        </div>
-                    `);
-                }
-            } catch (displayError) {
-                console.error('[CRITICAL] Failed to display error:', displayError);
-                alert(`Processing Error: ${error}\n\nPlease refresh the page and try again.`);
+                logToUser(`ERROR: Failed to update connection status: ${error.message}`);
             }
         }
 
         function downloadPartialResults() {
             const filename = '{{ request.args.get("filename", "analysis") }}' || 'analysis';
+            logToUser('ACTION: Downloading partial results...');
             window.location.href = `/download-partial?task_id=${taskId}&filename=${encodeURIComponent(filename)}`;
         }
 
-        // Add periodic health checks for long-running tasks
-        setInterval(() => {
-            const timeSinceLastSuccess = Date.now() - lastSuccessfulUpdate;
-            if (timeSinceLastSuccess > 120000) { // 2 minutes without updates
-                console.warn('[WATCHDOG] No updates for 2+ minutes, performing health check...');
-                checkAppHealth();
+        // Add visibility change handling
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                logToUser('INFO: Tab hidden - continuing background monitoring');
+            } else {
+                logToUser('INFO: Tab visible - resuming normal updates');
+                if (!isShowingError) {
+                    updateProgress(); // Force immediate update when tab becomes visible
+                }
             }
-        }, 30000); // Check every 30 seconds
+        });
 
-        // Start polling immediately
-        console.log('[INIT] Starting progress polling...');
+        // Start the process
+        logToUser('INIT: Starting document processing monitor...');
+        logToUser(`INIT: Task ID: ${taskId}`);
+        logToUser('INIT: Will check progress every 2 seconds...');
         updateProgress();
     </script>
 

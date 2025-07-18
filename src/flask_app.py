@@ -924,7 +924,7 @@ def process_document(task_id, file_path, query_terms, filename):
         gc.collect()
 
         # Step 5: Post-process results (100%)
-        pathe = time.time()
+        start_time = time.time()
         processing_tasks[task_id]["status"] = "Finalizing results..."
         processing_tasks[task_id]["progress"] = 90
         processing_tasks[task_id]["last_heartbeat"] = time.time()
