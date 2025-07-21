@@ -577,35 +577,58 @@ def extract_quotes(matches, filename):
         list: Original matches with extracted quotes added
         int: Total tokens used during the extraction process
     """
-    # Convert matches into the dictionary format needed for get_quotes
-    doc_dict = {}
-    for i, match in enumerate(matches):
-        doc_dict[str(i)] = {
-            'filename' : match["filename"],
-            'content': match["text"],
-            'type': 'text',  # Assuming all are text entries
-            'page_number': match["page"],
-            'score': match["score"]
-        }
-    
-    # Create the by-products folder if it doesn't exist
-    by_products_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'by-products')
-    os.makedirs(by_products_folder, exist_ok=True)
-    
-    # Extract quotes using the provided utility
-    with get_openai_callback() as cb:
-        quotes_dict = get_quotes(LLM, doc_dict)
+    try:
+        # Convert matches into the dictionary format needed for get_quotes
+        doc_dict = {}
+        for i, match in enumerate(matches):
+            doc_dict[str(i)] = {
+                'filename': match["filename"],
+                'content': match["text"],
+                'type': 'text',  # Assuming all are text entries
+                'page_number': match["page"],
+                'score': match["score"]
+            }
         
+        logging.info(f"Prepared {len(doc_dict)} matches for quote extraction")
+        
+        # Estimate API calls needed
+        estimated_calls = len(doc_dict) * 2  # extraction + revision per chunk
+        logging.info(f"Estimated Azure OpenAI API calls needed: {estimated_calls}")
+        
+        if estimated_calls > 50:
+            logging.warning(f"High API call count ({estimated_calls}) may trigger rate limits")
+        
+        # Create the by-products folder if it doesn't exist
+        by_products_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'by-products')
+        os.makedirs(by_products_folder, exist_ok=True)
+        
+        # Extract quotes using the provided utility with enhanced error handling
+        start_time = time.time()
+        with get_openai_callback() as cb:
+            quotes_dict = get_quotes(LLM, doc_dict)
+            total_tokens = cb.total_tokens
+        
+        extraction_time = time.time() - start_time
+        logging.info(f"Quote extraction completed in {extraction_time:.2f} seconds")
+        logging.info(f"API calls per second: {estimated_calls/extraction_time:.2f}")
+        logging.info(f"Total tokens used for quote extraction: {total_tokens}")
+            
         # Save the quotes to a JSON file
         quotes_path = os.path.join(by_products_folder, f"{os.path.splitext(os.path.basename(filename))[0]}_extracted-quotes.json")
         with open(quotes_path, 'w', encoding='utf-8') as f:
             json.dump(quotes_dict, f, ensure_ascii=False, indent=4)
         
-        # Log the total tokens used
-        total_tokens = cb.total_tokens
-        logging.info(f"Total tokens used for quote extraction: {total_tokens}")
-
-    return quotes_dict, total_tokens
+        return quotes_dict, total_tokens
+        
+    except Exception as e:
+        logging.error(f"Error in extract_quotes function: {e}")
+        logging.error(f"extract_quotes traceback: {traceback.format_exc()}")
+        
+        # Check for rate limiting specifically
+        if "rate limit" in str(e).lower():
+            raise Exception(f"Azure OpenAI rate limit: {e}")
+        else:
+            raise
 
 def highlight_terms_in_pdf(pdf_path, query_terms):
     """
@@ -1211,6 +1234,38 @@ def app_status():
         "memory_info": "available"  # You can add memory monitoring here
     })
 
+@app.route('/debug/logs')
+def debug_logs():
+    """Debug endpoint to see recent errors and API usage"""
+    try:
+        # Get recent processing task errors
+        errors = []
+        api_stats = {"total_tasks": len(processing_tasks), "rate_limit_errors": 0, "api_errors": 0}
+        
+        for task_id, task in processing_tasks.items():
+            if task.get('error'):
+                error_msg = task['error'].lower()
+                if "rate limit" in error_msg:
+                    api_stats["rate_limit_errors"] += 1
+                if "api" in error_msg or "openai" in error_msg:
+                    api_stats["api_errors"] += 1
+                    
+                errors.append({
+                    'task_id': task_id,
+                    'error': task['error'],
+                    'traceback': task.get('traceback', 'No traceback')[:500],  # Limit length
+                    'timestamp': task.get('last_heartbeat', 'Unknown')
+                })
+        
+        return jsonify({
+            'recent_errors': errors[-5:],  # Last 5 errors
+            'api_statistics': api_stats,
+            'active_tasks': len(processing_tasks),
+            'memory_mb': psutil.Process().memory_info().rss / 1024 / 1024
+        })
+    except Exception as e:
+        return jsonify({'debug_error': str(e)})
+    
 if __name__ == '__main__':
     # For Render.com, use the PORT environment variable
     port = int(os.environ.get('PORT', 10000))
