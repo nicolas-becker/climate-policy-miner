@@ -252,7 +252,7 @@ def get_quotes(llm, doc_dict):
                 snippet = value['summary']
             else:
                 snippet = value['content']
-           
+
             # invoke quote extraction chain with rate limiting awareness
             quote_extraction_chain = get_quote_extraction_Pydantic_chain(llm)
             

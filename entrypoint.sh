@@ -10,7 +10,8 @@ exec gunicorn \
     --bind "0.0.0.0:$PORT" \
     --timeout 3600 \
     --keep-alive 30 \
-    --max-requests 10 \
+    --max-requests 1000 \
+    --max-requests-jitter 10 \
     --worker-class sync \
     --worker-connections 1000 \
     --preload \
