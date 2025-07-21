@@ -45,6 +45,7 @@ from unstructured.cleaners.core import clean_extra_whitespace, clean_dashes, cle
 import re
 import unicodedata
 import gc
+import traceback
 import psutil
 
 try:

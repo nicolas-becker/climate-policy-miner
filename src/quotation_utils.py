@@ -9,6 +9,7 @@ QUOTE EXTRACTION MODULE
 
 import pprint
 import copy
+import time
 
 from tqdm import tqdm
 from typing import List, Optional
@@ -219,7 +220,7 @@ def get_quotes_with_keywords(llm, doc_dict):
 @traceable(
     task="quote extraction",
     version="base"
-    )
+)
 def get_quotes(llm, doc_dict):
     """
     Function extracting quotes from the retrieved documents. Returns a dictionary object containing the quotes along with relevant metadata.
@@ -240,26 +241,70 @@ def get_quotes(llm, doc_dict):
     
     #initialize result dictionary
     quotes_dict = {} 
+    api_call_count = 0
+    rate_limit_delays = 0
 
     for key, value in tqdm(doc_dict.items()):
-                    
-        if value['type'] == 'image':
-            snippet = value['summary']
-        
-        else:
-            snippet = value['content']
-           
-        # invoke quote extraction chain
-        quote_extraction_chain = get_quote_extraction_Pydantic_chain(llm)
-        
+        if int(key) > 0:
+            time.sleep(2)  # Small delay to avoid overwhelming the API - temporary solution, can be removed later
         try:
-            response_pydantic = quote_extraction_chain.invoke({"Context": snippet})
-            response = quotes_revision_chain(llm).invoke({"Quotes": response_pydantic.quotes})
-        except Exception as e:
-            print(f"Exception {e} occured during quote extraction.")
-            logger.exception(f'Exception {e} occured during quote extraction')
+            if value['type'] == 'image':
+                snippet = value['summary']
+            else:
+                snippet = value['content']
+           
+            # invoke quote extraction chain with rate limiting awareness
+            quote_extraction_chain = get_quote_extraction_Pydantic_chain(llm)
             
-        # add quotes to general results
+            api_call_count += 1
+            logger.info(f"Making API call #{api_call_count} for document chunk {key}")
+            
+            try:
+                response_pydantic = quote_extraction_chain.invoke({"Context": snippet})
+                api_call_count += 1
+                response = quotes_revision_chain(llm).invoke({"Quotes": response_pydantic.quotes})
+                
+            except Exception as api_error:
+                error_str = str(api_error).lower()
+                
+                # Check for specific Azure OpenAI error types
+                if "rate limit" in error_str or "429" in error_str:
+                    logger.error(f"Azure OpenAI rate limit exceeded on API call #{api_call_count}")
+                    raise Exception(f"Azure OpenAI rate limit exceeded. Made {api_call_count} API calls. Try processing a smaller document or wait a few minutes.")
+                
+                elif "quota" in error_str or "insufficient_quota" in error_str:
+                    logger.error(f"Azure OpenAI quota exceeded on API call #{api_call_count}")
+                    raise Exception(f"Azure OpenAI quota exceeded. Please check your Azure OpenAI subscription.")
+                
+                elif "authentication" in error_str or "unauthorized" in error_str:
+                    logger.error(f"Azure OpenAI authentication failed on API call #{api_call_count}")
+                    raise Exception(f"Azure OpenAI authentication failed. Please check your API credentials.")
+                
+                elif "timeout" in error_str:
+                    logger.error(f"Azure OpenAI timeout on API call #{api_call_count}")
+                    raise Exception(f"Azure OpenAI request timed out. The service may be overloaded.")
+                
+                elif "content filter" in error_str or "content_filter" in error_str:
+                    logger.warning(f"Content filtered by Azure OpenAI on API call #{api_call_count}")
+                    # Continue processing other chunks
+                    response = type('obj', (object,), {'quotes': []})()  # Empty response
+                
+                else:
+                    logger.error(f"Unknown Azure OpenAI error on API call #{api_call_count}: {api_error}")
+                    raise Exception(f"Azure OpenAI API error on call #{api_call_count}: {api_error}")
+            
+            # Add small delay between API calls to avoid rate limiting
+            if api_call_count % 5 == 0:  # Every 5 calls
+                time.sleep(1)  # 1 second delay
+                rate_limit_delays += 1
+                logger.info(f"Rate limiting delay #{rate_limit_delays} after {api_call_count} API calls")
+            
+        except Exception as e:
+            # Re-raise the exception so it propagates to Flask
+            logger.error(f"Critical error processing document chunk {key}: {e}")
+            raise
+        
+        # Process the response (add quotes to general results)
         i = len(quotes_dict)
         quotes_dict[i] = copy.deepcopy(value)
         quotes_dict[i].pop('similarity_score', None)
@@ -275,14 +320,16 @@ def get_quotes(llm, doc_dict):
                 else: # q NOT found in snippet
                     quotes_dict[i]['unverified_quotes'].append((index, q))
                     
-        except KeyError: 
+        except (KeyError, AttributeError):
             # no quotes in provided content
             quotes_dict[i]['quotes'] = []
             quotes_dict[i]['unverified_quotes'] = []
         except Exception as e:
             logger.exception(f'Exception {e} while processing quotes from extraction chain.')
-            
-                
+            quotes_dict[i]['quotes'] = []
+            quotes_dict[i]['unverified_quotes'] = []
+    
+    logger.info(f"Quote extraction completed. Total API calls: {api_call_count}, Rate limit delays: {rate_limit_delays}")
     return quotes_dict
 
 
