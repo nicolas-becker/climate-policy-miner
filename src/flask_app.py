@@ -24,6 +24,8 @@ import time
 import random
 import requests
 import mimetypes
+from pathlib import Path
+from dotenv import load_dotenv
 from urllib.parse import urlparse
 from werkzeug.utils import secure_filename
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
@@ -86,6 +88,10 @@ processing_tasks = {}
 #os.environ["LANGCHAIN_PROJECT"] = "climate_policy_pipeline"
 os.environ["LANGCHAIN_TRACING_V2"] = "false" # deactivate tracing for now, as api key is required to be updated to v2: "error":"Unauthorized: Using outdated v1 api key. Please use v2 api key."
 
+# Load environment variables from .env file
+env_path = Path(__file__).resolve().parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
+
 # Azure OpenAI Setup 
 LLM = AzureChatOpenAI(
     openai_api_version=os.environ["AZURE_OPENAI_API_VERSION"],
@@ -114,11 +120,6 @@ TAXONOMY = ["Transport",
             "Target",
             "Measure"
             ]
-
-# Add these imports at the top with your other imports
-import requests
-from urllib.parse import urlparse
-import mimetypes
 
 def download_pdf_from_url(url, save_dir):
     """
@@ -667,22 +668,43 @@ def classify_quotes(quotes_dict, file_directory):
     Returns:
         pd.DataFrame : A pandas DF containing the classified quotes.
     """
-    # Classification of quotes into predefined categories
-    output_df = tagging_classifier_quotes(quotes_dict=quotes_dict, llm=LLM, fewshot=True)
+    try:
+        app.logger.info(f"Starting classification with {len(quotes_dict)} quotes")
+        app.logger.info(f"quotes_dict type: {type(quotes_dict)}")
+    
+        # Classification of quotes into predefined categories
+        output_df = tagging_classifier_quotes(quotes_dict=quotes_dict, llm=LLM, fewshot=True)
 
-    # Save results in Excel and CSV{LLM.model_name}_{namespace}
-    by_products_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'by-products')
-    os.makedirs(by_products_folder, exist_ok=True)  # Ensure the subfolder exists
-    output_df.to_excel(os.path.join(by_products_folder, f"{os.path.splitext(os.path.basename(file_directory))[0]}_fewshot-tagging_{LLM.model_name}.xlsx"))
-    output_df.to_csv(os.path.join(by_products_folder, f"{os.path.splitext(os.path.basename(file_directory))[0]}_fewshot-tagging_{LLM.model_name}.csv"))
+        # Save results in Excel and CSV{LLM.model_name}_{namespace}
+        by_products_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'by-products')
+        os.makedirs(by_products_folder, exist_ok=True)  # Ensure the subfolder exists
+        
+        try:
+            excel_path = os.path.join(by_products_folder, f"{os.path.splitext(os.path.basename(file_directory))[0]}_fewshot-tagging_{LLM.model_name}.xlsx")
+            output_df.to_excel(excel_path)
+            app.logger.info(f"Saved Excel: {excel_path}")
+        except Exception as excel_error:
+            app.logger.error(f"Failed to save Excel: {excel_error}")
+            
+        try:
+            csv_path = os.path.join(by_products_folder, f"{os.path.splitext(os.path.basename(file_directory))[0]}_fewshot-tagging_{LLM.model_name}.csv")
+            output_df.to_csv(csv_path)
+            app.logger.info(f"Saved CSV: {csv_path}")
+        except Exception as csv_error:
+            app.logger.error(f"Failed to save CSV: {csv_error}")
 
-    # TODO: Save the classified quotes to a JSON file
-#    classified_quotes_path = os.path.join(by_products_folder, f"{os.path.splitext(os.path.basename(file_directory))[0]}_classified-quotes.json")
-#    with open(classified_quotes_path, 'w', encoding='utf-8') as f:
-#        json.dump(classified_quotes, f, ensure_ascii=False, indent=4)
 
+        # TODO: Save the classified quotes to a JSON file
+    #    classified_quotes_path = os.path.join(by_products_folder, f"{os.path.splitext(os.path.basename(file_directory))[0]}_classified-quotes.json")
+    #    with open(classified_quotes_path, 'w', encoding='utf-8') as f:
+    #        json.dump(classified_quotes, f, ensure_ascii=False, indent=4)
 
-    return output_df
+        return output_df
+    
+    except Exception as e:
+        app.logger.error(f"Classification failed: {e}")
+        app.logger.error(f"Classification traceback: {traceback.format_exc()}")
+        raise  # Re-raise to be caught by process_document
 
 def postprocess_results(file_directory, output_df, filename):
     """
@@ -713,8 +735,19 @@ def postprocess_results(file_directory, output_df, filename):
 
     #  targets
     targets_output_df = output_df[output_df['target']=='True']
-    targets_output_df=targets_output_df[['quote', 'page', 'target_labels']]
-    
+    targets_output_df=targets_output_df[['quote', 'page', 'target_labels', 'target_area', 'ghg_target', 'conditionality']]
+    targets_output_df = targets_output_df.rename(columns={
+        'quote': 'Content',
+        'page': 'Page Number',
+        'target_area': 'Target area',
+        'ghg_target': 'GHG target?',
+        'conditionality': 'Conditionality'
+    })
+    targets_output_df["Target scope"] = ""
+    targets_output_df["Target type"] = ""
+    targets_output_df["Target year"] = ""
+    targets_output_df = targets_output_df[["Target area", "Target scope", "GHG target?", "Target type", "Conditionality", "Target year", "Content", "Page Number"]]
+
     #  mitigation
     mitigation_output_df = output_df[output_df['mitigation_measure']=='True']
     mitigation_output_df = mitigation_output_df[['quote', 'page', 'measure_labels']]
@@ -784,9 +817,64 @@ def create_results_zip():
         if os.path.exists(log_file):
             zf.write(log_file, os.path.relpath(log_file, app.config['UPLOAD_FOLDER']))
 
+        # Create a manifest file listing the contents of the zip
+        manifest_content = f"""TRANSPORT POLICY MINER - RESULTS PACKAGE
+==========================================
+Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}
+
+CONTENTS:
+- output/: Final analysis results (Excel, highlighted PDF)
+- by-products/: Intermediate processing files (JSON, CSV)
+- vector_stores/: Semantic search indexes
+- logs/: Processing logs
+"""
+        zf.writestr("README.txt", manifest_content)
+
     # Move to the beginning of the BytesIO buffer
     memory_file.seek(0)
     return memory_file
+
+def cleanup_old_results(keep_base_filename=None):
+    """
+    Clean up old result files, optionally keeping files for a specific document
+    
+    Args:
+        keep_base_filename (str): Base filename to keep (others will be deleted)
+    """
+    try:
+        results_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results')
+        
+        if not os.path.exists(results_folder):
+            return
+        
+        files_deleted = 0
+        folders_to_check = ['output', 'by-products', 'vector_stores']
+        
+        for folder_name in folders_to_check:
+            folder_path = os.path.join(results_folder, folder_name)
+            if os.path.exists(folder_path):
+                for file in os.listdir(folder_path):
+                    file_path = os.path.join(folder_path, file)
+                    
+                    # Delete files that don't belong to the current document
+                    if keep_base_filename:
+                        if keep_base_filename.lower() not in file.lower():
+                            try:
+                                if os.path.isfile(file_path):
+                                    os.remove(file_path)
+                                    files_deleted += 1
+                                elif os.path.isdir(file_path):
+                                    import shutil
+                                    shutil.rmtree(file_path)
+                                    files_deleted += 1
+                            except Exception as e:
+                                app.logger.warning(f"Could not delete {file_path}: {e}")
+        
+        if files_deleted > 0:
+            app.logger.info(f"Cleaned up {files_deleted} old result files")
+            
+    except Exception as e:
+        app.logger.error(f"Error during cleanup: {e}")
 
 def create_partial_results_zip():
     """
@@ -847,6 +935,10 @@ def process_document(task_id, file_path, query_terms, filename):
         filename (str): Original filename
     """
     try:
+        # Clean up old results before starting new processing
+        base_filename = os.path.splitext(filename)[0]
+        cleanup_old_results(keep_base_filename=base_filename)
+
         # Initialize progress tracking
         processing_tasks[task_id] = {
             "progress": 0,
@@ -933,10 +1025,14 @@ def process_document(task_id, file_path, query_terms, filename):
         processing_tasks[task_id]["status"] = "Classifying extracted quotes..."
         processing_tasks[task_id]["progress"] = 70
         processing_tasks[task_id]["last_heartbeat"] = time.time()
+        
+        app.logger.info(f"[TASK {task_id}] Starting quote classification")
         with get_openai_callback() as cb:
             classified = classify_quotes(citations, file_path)
             tokens_used = cb.total_tokens
             total_tokens_used += tokens_used  # Update total tokens used
+        app.logger.info(f"[TASK {task_id}] Quote classification completed successfully")
+
         processing_tasks[task_id]["progress"] = 80
         processing_tasks[task_id]["status"] = "AI classification completed."
         processing_tasks[task_id]["last_heartbeat"] = time.time()
@@ -979,6 +1075,8 @@ def process_document(task_id, file_path, query_terms, filename):
         processing_tasks[task_id]["error"] = str(e)
         processing_tasks[task_id]["traceback"] = error_traceback
         processing_tasks[task_id]["status"] = f"Error: {str(e)}"
+        processing_tasks[task_id]["failed"] = True 
+        processing_tasks[task_id]["last_heartbeat"] = time.time()
         logging.error(f"Error processing document: {e}")
         logging.error(f"Traceback: {error_traceback}")
         app.logger.error(f"Task {task_id} failed: {e}")
@@ -1059,7 +1157,7 @@ def index():
             # Start processing in a background thread
             thread = threading.Thread(target=process_document, 
                                     args=(task_id, file_path, query_terms, filename))
-            thread.daemon = True
+            thread.daemon = False
             thread.start()
             
             # Redirect to progress page
@@ -1119,37 +1217,71 @@ def detailed_task_status(task_id):
 @app.route('/api/progress/<task_id>')
 def progress(task_id):
     """
-    API endpoint to retrieve task progress
+    API endpoint to retrieve task progress with enhanced error handling
     """
-    if task_id in processing_tasks:
+    try:
+        app.logger.info(f"[API] Progress check for task {task_id}")
+        
+        if task_id not in processing_tasks:
+            app.logger.warning(f"[API] Task {task_id} not found in processing_tasks")
+            return jsonify({"error": "Task not found", "task_id": task_id}), 404
+        
         task = processing_tasks[task_id]
+        app.logger.info(f"[API] Task {task_id} progress: {task.get('progress', 0)}%")
+        
+        # Check if task has failed FIRST
+        if task.get("error") is not None:
+            # DEBUG: Log what we're about to return
+            partial_results = task.get("partial_results", {})
+            has_partial_results = bool(partial_results)
+            
+            app.logger.error(f"[API] Task {task_id} failed with error: {task['error']}")
+            app.logger.error(f"[DEBUG] partial_results: {partial_results}")
+            app.logger.error(f"[DEBUG] has_partial_results: {has_partial_results}")
+            
+            response_data = {
+                "progress": task.get("progress", 0),
+                "status": task.get("status", "Failed"),
+                "failed": True,
+                "error": task["error"],
+                "traceback": task.get("traceback", "No traceback available"),
+                "has_partial_results": has_partial_results,
+                "partial_results_summary": partial_results,
+                "timestamp": time.time(),
+                "memory_usage": psutil.Process().memory_info().rss / 1024 / 1024
+            }
+            
+            app.logger.error(f"[DEBUG] Response JSON: {json.dumps(response_data, indent=2)}")
+            return jsonify(response_data)
+        
+        
+        # Check if processing is complete
+        if task.get("progress", 0) >= 100 and task.get("error") is None:
+            app.logger.info(f"[API] Task {task_id} completed successfully")
+            return jsonify({
+                "progress": 100,
+                "status": "Analysis complete",
+                "completed": True,
+                "redirect": url_for('results', task_id=task_id),
+                "timestamp": time.time(),
+                "memory_usage": psutil.Process().memory_info().rss / 1024 / 1024
+            })
+        
+        # Return normal progress update
         response = {
             "progress": task.get("progress", 0),
             "status": task.get("status", f"Processing... {task.get('progress', 0)}%"),
-            "timestamp": time.time(),  # Add timestamp for debugging
-            "memory_usage": psutil.Process().memory_info().rss / 1024 / 1024,  # Add memory info
+            "timestamp": time.time(),
+            "memory_usage": psutil.Process().memory_info().rss / 1024 / 1024,
+            "last_heartbeat": task.get("last_heartbeat", time.time())
         }
         
-        # If processing is complete, include redirect URL
-        if task["progress"] == 100 and task.get("error") is None:
-            response["redirect"] = url_for('results', task_id=task_id)
-            response["completed"] = True
-        
-        # If there was an error, include it and the traceback
-        if task.get("error") is not None:
-            response["error"] = task["error"]
-            response["traceback"] = task.get("traceback", "")
-            response["failed"] = True
-            
-            # Check if any partial results are available for download
-            partial_results = task.get("partial_results", {})
-            has_partial_results = any(partial_results.values())
-            response["has_partial_results"] = has_partial_results
-            response["partial_results_summary"] = partial_results
-
         return jsonify(response)
-    else:
-        return jsonify({"error": "Task not found", "task_id": task_id}), 404
+        
+    except Exception as e:
+        app.logger.error(f"[API] Error in progress endpoint for task {task_id}: {e}")
+        app.logger.error(f"[API] Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Progress check failed: {str(e)}"}), 500
 
 
 @app.route('/download')
@@ -1266,7 +1398,30 @@ def debug_logs():
     except Exception as e:
         return jsonify({'debug_error': str(e)})
     
+@app.route('/debug/task/<task_id>')
+def debug_task(task_id):
+    """Debug endpoint to see raw task data"""
+    if task_id in processing_tasks:
+        task = processing_tasks[task_id]
+        return jsonify({
+            'task_exists': True,
+            'task_data': {
+                'progress': task.get('progress', 'NOT_SET'),
+                'status': task.get('status', 'NOT_SET'),
+                'partial_results': task.get('partial_results', 'NOT_SET'),
+                'error': task.get('error', 'NOT_SET'),
+                'error_type': type(task.get('error')).__name__,
+                'has_error': task.get('error') is not None,
+                'failed_flag': task.get('failed', 'NOT_SET'),
+                'traceback_exists': task.get('traceback') is not None,
+                'last_heartbeat': task.get('last_heartbeat', 'NOT_SET'),
+                'all_keys': list(task.keys())
+            }
+        })
+    else:
+        return jsonify({'task_exists': False, 'task_id': task_id})
+    
 if __name__ == '__main__':
     # For Render.com, use the PORT environment variable
     port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port, debug=False)  # Set debug=True for development
+    app.run(host='0.0.0.0', port=port, debug=True)  # Set debug=True for development

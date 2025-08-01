@@ -1307,7 +1307,7 @@ def tagging_classifier_quotes(quotes_dict, llm, fewshot = True):
 
     """
     # initialize output dataframes
-    output_df = pd.DataFrame(columns=['document', 'page', 'info_type', 'quote', 'target_labels', 'measure_labels'])
+    output_df = pd.DataFrame(columns=['document', 'page', 'info_type', 'quote', 'target_labels', 'measure_labels', 'target_area', 'ghg_target', 'conditionality'])
     
     for key, value in quotes_dict.items():
         
@@ -1327,6 +1327,9 @@ def tagging_classifier_quotes(quotes_dict, llm, fewshot = True):
                 entry.append(q[1])
                 entry.append('NONE') #placeholder for target labels
                 entry.append('NONE') #placeholder for measure labels
+                entry.append('NONE') #placeholder for target_area
+                entry.append('NONE') #placeholder for ghg_target
+                entry.append('NONE') #placeholder for conditionality
                 output_df.loc[len(output_df.index)] = entry
                 
     if fewshot:
@@ -1340,6 +1343,10 @@ def tagging_classifier_quotes(quotes_dict, llm, fewshot = True):
     # mapping
     try:
         output_df['target_labels'] = output_df.apply(lambda row : target_mapping_old(row), axis=1)
+        output_df['target_area'] = output_df.apply(lambda row : target_area_mapping(row), axis=1)
+        output_df['ghg_target'] = output_df.apply(lambda row : ghg_target_mapping(row), axis=1)
+        output_df['conditionality'] = output_df.apply(lambda row : conditionality_mapping(row), axis=1)
+
         output_df['measure_labels'] = output_df.apply(lambda row : measure_mapping(row), axis=1)
     except Exception:
         logger.exception('Error while applying label mappers')
@@ -1452,6 +1459,110 @@ def target_mapping_new(row):
         targets.append('T_Unclear') #NEW
         
     return targets
+
+def safe_bool_check(value):
+    """Safely check if a value represents True, handling both strings and booleans"""
+    if isinstance(value, str):
+        return value.lower() == 'true'
+    return bool(value)
+
+#NEW
+def target_area_mapping(row):
+    """Target Area attribution according to the tagging results."""
+    try:
+        target_area = '--'
+        
+        economy_wide = safe_bool_check(row.get('economy_wide', False))
+        net_zero = safe_bool_check(row.get('net_zero', False))
+        mitigation = safe_bool_check(row.get('mitigation', False))
+        ghg = safe_bool_check(row.get('ghg', False))
+        transport = safe_bool_check(row.get('transport', False))
+        adaptation = safe_bool_check(row.get('adaptation', False))
+        energy = safe_bool_check(row.get('energy', False))
+        
+        if economy_wide and net_zero:
+            target_area = 'Net zero target'
+        elif economy_wide and mitigation and ghg:
+            target_area = 'Overall mitigation target'
+        elif transport and mitigation and ghg:
+            target_area = 'Transport sector mitigation target'
+        elif transport and adaptation:
+            target_area = 'Transport sector adaptation target'
+        elif energy and mitigation:
+            target_area = 'Energy sector target'
+            
+        return target_area
+    except Exception as e:
+        print(f"Error in target_area_mapping: {e}")
+        return '--'
+
+#NEW
+def ghg_target_mapping(row):
+    """
+    GHG Target attribution according to the tagging results.
+
+    Parameters
+    ----------
+    row : pd.Series
+        Row of a Dataframe containing the tagging results.
+
+    Returns
+    -------
+    ghg_target_area : string
+        Applicable target area according to taxonomy used by NDC Tracker for the specified row.
+    """
+    try:
+        ghg_target_area = '--'
+        
+        # Use safe boolean check instead of string comparison
+        ghg = safe_bool_check(row.get('ghg', False))
+        
+        if ghg:
+            ghg_target_area = 'GHG'
+        else:
+            ghg_target_area = 'Non-GHG'
+
+        return ghg_target_area
+    except Exception as e:
+        print(f"Error in ghg_target_mapping: {e}")
+        return '--'
+
+#NEW
+def conditionality_mapping(row):
+    """
+    Conditionality attribution according to the tagging results.
+
+    Parameters
+    ----------
+    row : pd.Series
+        Row of a Dataframe containing the tagging results.
+
+    Returns
+    -------
+    conditionality_area : string
+        Applicable conditionality according to taxonomy used by NDC Tracker for the specified row.
+    """
+    try:
+        conditionality = '--'
+        
+        # Use safe boolean checks instead of string comparisons
+        conditional = safe_bool_check(row.get('conditional', False))
+        unconditional = safe_bool_check(row.get('unconditional', False))
+        
+        if conditional and not unconditional:
+            conditionality = 'Conditional'
+        elif not conditional and unconditional:
+            conditionality = 'Unconditional'
+        elif not conditional and not unconditional:
+            conditionality = 'Unclear conditionality'
+        elif conditional and unconditional:
+            conditionality = 'Unclear conditionality'
+
+        return conditionality
+    except Exception as e:
+        print(f"Error in conditionality_mapping: {e}")
+        return '--'
+
 
 def parameter_type_mapping(row):
     """

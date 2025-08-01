@@ -17,9 +17,6 @@ import unicodedata
 import numpy as np
 import json
 
-#from fuzzywuzzy import fuzz
-from tqdm import tqdm
-
 # Load configuration
 def load_config(config_file):
     try:
@@ -127,41 +124,62 @@ def create_highlighted_pdf(filename, quotes, output_path, df=None, color='yellow
         Destination path for the highlighted document.
     df : pd.DataFrame
         DataFrame containing additional information to the quotes
+    color : str
+        Default highlight color (legacy parameter)
+    opacity : float
+        Opacity of highlights (0.0 to 1.0)
 
     Returns
     -------
-    quote_links : list(str)
-        List containing links to the quotes in the document
-        
+    None
     """
     #TODO: Highlighting Scanned Text - OCR
     #TODO - create link to quote in document --> https://pymupdf.readthedocs.io/en/latest/the-basics.html#getting-page-links
     
-    # read pdf with pymudpdf
+    # Open PDF document
     doc = fitz.open(filename)
-    #quote_links = []
-    for i, quote in tqdm(enumerate(quotes)): 
+    
+    # Add legend to the first page
+    if len(doc) > 0:
+        first_page = doc[0]
+        add_legend_box(first_page)
+    
+    # Process quotes and highlight them
+    for i, quote in enumerate(quotes):  # remove tqdm to avoid threading issues
         if df is not None:
             row=df.iloc[i]
         else:
-            # of no df is provided, all quotes are highlighted as targets
-            row={}
+            # If no df is provided, all quotes are highlighted as targets
+            row = {}
             row['target'] = 'True'
             row['measure'] = 'False'
-            
+        
+        # Determine highlight colors based on classification
+        is_target = row.get('target', 'False') == 'True'
+        is_measure = row.get('measure', 'False') == 'True'
+        
         for page_number in range(len(doc)):
             page = doc[page_number] 
-            # search for quote on page
+            # Search for quote on page
             text_instances = page.search_for(quote)
             
-            # highlight
+            # Highlight based on classification
             for inst in text_instances:
-                if row['target'] == 'True': # targets highlighted in yellow
+                if is_target and is_measure:
+                    # Both target and measure - GREEN
                     highlight = page.add_highlight_annot(inst)
-                    highlight.set_opacity(opacity)  # Set opacity (0.0 to 1.0)
-                    highlight.update() 
-                
-                if row['measure'] == 'True': # measures highlighted in blue
+                    highlight.set_colors(stroke=(0, 1, 0))  # RGB for green
+                    highlight.set_opacity(opacity)
+                    highlight.update()
+                    
+                elif is_target:
+                    # Target only - YELLOW (default)
+                    highlight = page.add_highlight_annot(inst)
+                    highlight.set_opacity(opacity)
+                    highlight.update()
+                    
+                elif is_measure:
+                    # Measure only - BLUE/CYAN
                     highlight = page.add_highlight_annot(inst)
                     highlight.set_colors(stroke=(0, 1, 1))  # RGB for cyan
                     highlight.set_opacity(opacity)  # Set opacity (0.0 to 1.0)
@@ -170,15 +188,88 @@ def create_highlighted_pdf(filename, quotes, output_path, df=None, color='yellow
                 # annotation with comments containing classification
                 #if (quote.target_labels != 'None') | (quote.measure_labels != 'None'):
                 #    highlight.set_info(content=f"Target Labels: {quote.target_labels}; Measure Labels: {quote.measure_labels}")
-                
-                # Create a link annotation for the highlighted text
+            
+                # TODO: Create a link annotation for the highlighted text
                 #link = page.add_link_annot(inst, page_number, -1)
                 #quote_links.append(link)
             
     # save output --> https://pymupdf.readthedocs.io/en/latest/document.html#Document.save
     doc.save(output_path, garbage=4, deflate=True, clean=True)
+    doc.close()
+
+def add_legend_box(page):
+    """
+    Add a legend box to the top-right corner of a PDF page.
     
-    #return quote_links
+    Parameters
+    ----------
+    page : fitz.Page
+        The PDF page to add the legend to.
+    """
+    
+    try:
+        # Get page dimensions
+        page_rect = page.rect
+        
+        # Define legend box position (top-right corner)
+        legend_width = 150
+        legend_height = 120
+        margin = 20
+        
+        legend_rect = fitz.Rect(
+            page_rect.width - legend_width - margin,
+            margin,
+            page_rect.width - margin,
+            margin + legend_height
+        )
+        
+        # Draw legend background
+        page.draw_rect(legend_rect, color=(0, 0, 0), fill=(1, 1, 1), width=1)
+        
+        # Add legend title - USE BUILT-IN FONT
+        title_point = fitz.Point(legend_rect.x0 + 10, legend_rect.y0 + 20)
+        page.insert_text(
+            title_point, 
+            "Legend", 
+            fontsize=12, 
+            color=(0, 0, 0), 
+            fontname="Times-Bold"  # ← CHANGE FROM "helv-bold" TO "Times-Bold"
+        )
+        
+        # Add legend items
+        legend_items = [
+            ("Target", (1, 1, 0)),      # Yellow (default highlight color)
+            ("Measure", (0, 1, 1)),     # Blue/Cyan
+            ("Both", (0, 1, 0))         # Green
+        ]
+        
+        y_offset = 35
+        for item_text, color in legend_items:
+            # Draw color box
+            color_rect = fitz.Rect(
+                legend_rect.x0 + 10,
+                legend_rect.y0 + y_offset,
+                legend_rect.x0 + 25,
+                legend_rect.y0 + y_offset + 10
+            )
+            page.draw_rect(color_rect, fill=color, width=0)
+            
+            # Add text - USE BUILT-IN FONT
+            text_point = fitz.Point(legend_rect.x0 + 30, legend_rect.y0 + y_offset + 8)
+            page.insert_text(
+                text_point, 
+                item_text, 
+                fontsize=10, 
+                color=(0, 0, 0), 
+                fontname="Times-Roman"  # ← CHANGE FROM "helv" TO "Times-Roman"
+            )
+            
+            y_offset += 20
+            
+    except Exception as e:
+        print(f"Warning: Could not add legend box: {e}")
+        # Don't fail the entire process for legend issues
+        pass
 
 
 def setup_logger(name, log_file, level=logging.DEBUG):

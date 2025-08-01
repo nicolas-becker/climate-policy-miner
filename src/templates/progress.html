@@ -94,6 +94,7 @@
                 <div class="alert alert-info" role="alert">
                     <h4>📄 Document Analysis in Progress</h4>
                     <p class="mb-2">Document: <strong>{{ original_filename or 'Loading...' }}</strong></p>
+                    <p class="mb-2">Task ID: <code>{{ task_id }} (for debugging purposes)</code></p>
                     <p>Your document is being analyzed. Large documents may take 10-20 minutes.</p>
                     <p><strong>Please keep this window open.</strong></p>
                 </div>
@@ -162,93 +163,6 @@
         let lastSuccessfulUpdate = Date.now();
         let isShowingError = false;
 
-        function updateProgress() {
-            const timestamp = new Date().toISOString();
-            logToUser(`[${timestamp}] Checking progress...`);
-            
-            fetch(`/api/progress/${taskId}`, {
-                method: 'GET',
-                headers: { 
-                    'Cache-Control': 'no-cache',
-                    'Accept': 'application/json'
-                }
-            })
-            .then(response => {
-                logToUser(`[${timestamp}] Server responded with status: ${response.status}`);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                logToUser(`[${timestamp}] Received progress: ${data.progress}% - ${data.status}`);
-                
-                // Reset failure counters on success
-                retryCount = 0;
-                consecutiveFailures = 0;
-                lastSuccessfulUpdate = Date.now();
-                
-                // Hide any error displays and show progress again
-                hideErrorDisplay();
-                showProgressDisplay();
-                
-                updateConnectionStatus('✅ Connected and receiving updates');
-                
-                // Validate data structure
-                if (typeof data.progress === 'undefined') {
-                    throw new Error('Invalid progress data received from server');
-                }
-                
-                // Update progress display
-                updateProgressDisplay(data.progress, data.status || `Processing... ${data.progress}%`);
-                
-                if (data.completed && data.redirect) {
-                    logToUser('[SUCCESS] Processing completed successfully! Redirecting to results...');
-                    document.getElementById('status-text').textContent = '✅ Analysis Complete! Redirecting...';
-                    hideInfoBanner();
-                    setTimeout(() => {
-                        window.location.href = data.redirect;
-                    }, 2000);
-                } else if (data.failed && data.error) {
-                    logToUser(`[ERROR] Processing failed: ${data.error}`);
-                    showProcessingError(data.error, data.traceback, data.has_partial_results);
-                } else {
-                    // Continue polling
-                    setTimeout(updateProgress, pollInterval);
-                }
-            })
-            .catch(error => {
-                consecutiveFailures++;
-                retryCount++;
-                
-                const errorMsg = `Connection attempt ${retryCount}/${maxRetries} failed: ${error.message}`;
-                logToUser(`[ERROR] ${errorMsg}`);
-                
-                // Update connection status with specific error type
-                if (error.message.includes('Failed to fetch')) {
-                    updateConnectionStatus(`❌ Network connection lost (${consecutiveFailures} failures)`);
-                    showConnectionError('network');
-                } else if (error.message.includes('timeout')) {
-                    updateConnectionStatus(`⏰ Server not responding (${consecutiveFailures} timeouts)`);
-                    showConnectionError('timeout');
-                } else {
-                    updateConnectionStatus(`⚠️ Connection error (${consecutiveFailures} failures)`);
-                    showConnectionError('general');
-                }
-                
-                // Check if we should give up
-                if (retryCount >= maxRetries) {
-                    logToUser(`[CRITICAL] Giving up after ${maxRetries} failed attempts`);
-                    showCriticalError();
-                } else {
-                    const retryDelay = Math.min(1000 * Math.pow(1.5, retryCount), 15000);
-                    logToUser(`[RETRY] Will retry in ${(retryDelay/1000).toFixed(1)} seconds...`);
-                    setTimeout(updateProgress, retryDelay);
-                }
-            });
-        }
-
         function showProgressDisplay() {
             const progressContainer = document.querySelector('.progress-container');
             const infoBanner = document.querySelector('.alert-info');
@@ -274,6 +188,190 @@
             if (infoBanner) {
                 infoBanner.style.display = 'none';
             }
+        }
+
+        function copyErrorToClipboard() {
+            try {
+                const taskId = '{{ task_id }}';
+                const filename = '{{ original_filename }}' || 'unknown_document';
+                const timestamp = new Date().toISOString();
+                
+                // Get error details from the page
+                const errorTitle = document.querySelector('.alert-danger h4')?.textContent || 'Unknown Error';
+                const errorMessage = document.querySelector('.alert-danger p strong')?.textContent || 'No error message';
+                const consoleLog = getConsoleLog();
+                
+                // Get traceback if available
+                const tracebackElement = document.querySelector('details pre');
+                const traceback = tracebackElement ? tracebackElement.textContent : 'No traceback available';
+                
+                // Create comprehensive error report
+                const errorReport = `
+TRANSPORT POLICY MINER - ERROR REPORT
+=====================================
+Timestamp: ${timestamp}
+Task ID: ${taskId}
+Document: ${filename}
+
+ERROR DETAILS:
+${errorTitle}
+${errorMessage}
+
+CONSOLE LOG:
+${consoleLog}
+
+FULL TRACEBACK:
+${traceback}
+
+SYSTEM INFO:
+Browser: ${navigator.userAgent}
+URL: ${window.location.href}
+=====================================
+                `.trim();
+                
+                // Copy to clipboard
+                navigator.clipboard.writeText(errorReport).then(() => {
+                    // Show success feedback
+                    const copyBtn = document.getElementById('copy-error-btn');
+                    if (copyBtn) {
+                        const originalText = copyBtn.innerHTML;
+                        copyBtn.innerHTML = '✅ Copied!';
+                        copyBtn.className = 'btn btn-success btn-sm';
+                        
+                        // Reset after 2 seconds
+                        setTimeout(() => {
+                            copyBtn.innerHTML = originalText;
+                            copyBtn.className = 'btn btn-outline-secondary btn-sm';
+                        }, 2000);
+                    }
+                    
+                    logToUser('[ACTION] Error details copied to clipboard');
+                }).catch(err => {
+                    // Fallback for older browsers
+                    logToUser('[ERROR] Could not copy to clipboard: ' + err.message);
+                    
+                    // Create a text area for manual copy
+                    const textArea = document.createElement('textarea');
+                    textArea.value = errorReport;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    
+                    try {
+                        document.execCommand('copy');
+                        logToUser('[ACTION] Error details selected - please press Ctrl+C to copy');
+                    } catch (fallbackErr) {
+                        logToUser('[ERROR] Manual copy also failed: ' + fallbackErr.message);
+                    }
+                    
+                    document.body.removeChild(textArea);
+                });
+            } catch (error) {
+                logToUser('[ERROR] Copy function failed: ' + error.message);
+            }
+        }
+
+        function showErrorMessage(title, message, suggestions, isProcessingError, traceback = null, hasPartialResults = false) {
+            console.log('showErrorMessage called with:', {title, message, hasPartialResults});
+            isShowingError = true;
+            
+            // Hide progress container
+            //const progressContainer = document.querySelector('.progress-container');
+            //console.log('Progress container found:', !!progressContainer);
+            //if (progressContainer) {
+            //    progressContainer.style.display = 'none';
+            //    console.log('Progress container hidden');
+            //}
+
+            // Show or create error container
+            let errorContainer = document.getElementById('error-container');
+            console.log('Error container found:', !!errorContainer);
+            console.log('Error container current display:', errorContainer ? errorContainer.style.display : 'N/A');
+    
+            if (errorContainer) {
+                errorContainer.innerHTML = `
+                    <div class="alert alert-danger" style="background: red; color: white; padding: 20px;">
+                        <h1>TEST ERROR MESSAGE</h1>
+                        <p>This is a test to see if error display works</p>
+                        <p>Title: ${title}</p>
+                        <p>Message: ${message}</p>
+                        <p>hasPartialResults: ${hasPartialResults}</p>
+                    </div>
+                `;
+                errorContainer.style.display = 'block';
+                console.log('Error container updated and shown');
+                console.log('Error container final display:', errorContainer.style.display);
+            } else {
+                console.error('ERROR CONTAINER NOT FOUND!');
+            }
+
+            if (!errorContainer) {
+                errorContainer = document.createElement('div');
+                errorContainer.id = 'error-container';
+                errorContainer.className = 'mt-4';
+                
+                // Insert after progress container or at end of card body
+                const cardBody = document.querySelector('.card-body');
+                const progressContainer = document.querySelector('.progress-container');
+                
+                if (progressContainer && progressContainer.parentNode) {
+                    progressContainer.parentNode.insertBefore(errorContainer, progressContainer.nextSibling);
+                } else if (cardBody) {
+                    cardBody.appendChild(errorContainer);
+                }
+            }
+            
+            // Update error content
+            const errorHtml = `
+                <div class="alert alert-danger" role="alert">
+                    <h4>${title}</h4>
+                    <p><strong>${message}</strong></p>
+                    
+                    <h6 class="mt-3">What you can do:</h6>
+                    <ul>
+                        ${suggestions.map(suggestion => `<li>${suggestion}</li>`).join('')}
+                    </ul>
+                    
+                    ${hasPartialResults ? `
+                        <div class="alert alert-warning mt-3">
+                            <strong>📦 Partial Results Available</strong><br>
+                            Some processing steps completed before the error. You can download what was processed.
+                        </div>
+                        <button class="btn btn-warning me-2" onclick="downloadPartialResults()">
+                                📦 Download Partial Results
+                        </button>
+                    ` : ''}
+                    
+                    <div class="mt-3">
+                        <h6>🔍 Live Console Log:</h6>
+                        <div id="console-log" style="background: #f8f9fa; padding: 10px; border-radius: 4px; max-height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; border: 1px solid #dee2e6; white-space: pre-wrap;">
+                            ${getConsoleLog()}
+                        </div>
+                    </div>
+
+                    <button id="copy-error-btn" class="btn btn-outline-secondary btn-sm" onclick="copyErrorToClipboard()">
+                            📋 Copy Error Details
+                    </button>
+                    
+                    ${traceback ? `
+                        <details class="mt-3">
+                            <summary><strong>Full Error Details</strong></summary>
+                            <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 12px; max-height: 300px; overflow-y: auto; white-space: pre-wrap;">${traceback}</pre>
+                        </details>
+                    ` : ''}
+                    
+                    <div class="mt-4 text-center">
+                        <button class="btn btn-primary" onclick="location.reload()">
+                            🔄 Try Again
+                        </button>
+                        <a href="/" class="btn btn-primary">
+                            🏠 Return to Home
+                        </a>
+                    </div>
+                </div>
+            `;
+            
+            errorContainer.innerHTML = errorHtml;
+            errorContainer.style.display = 'block';
         }
 
         function showConnectionError(errorType) {
@@ -349,83 +447,6 @@
             showErrorMessage(errorTitle, errorMessage, suggestions, true);
         }
 
-        function showErrorMessage(title, message, suggestions, isProcessingError, traceback = null, hasPartialResults = false) {
-            isShowingError = true;
-            
-            // Hide progress container
-            const progressContainer = document.querySelector('.progress-container');
-            if (progressContainer) progressContainer.style.display = 'none';
-            
-            // Show or create error container
-            let errorContainer = document.getElementById('error-container');
-            if (!errorContainer) {
-                errorContainer = document.createElement('div');
-                errorContainer.id = 'error-container';
-                errorContainer.className = 'mt-4';
-                
-                // Insert after progress container or at end of card body
-                const cardBody = document.querySelector('.card-body');
-                const progressContainer = document.querySelector('.progress-container');
-                
-                if (progressContainer && progressContainer.parentNode) {
-                    progressContainer.parentNode.insertBefore(errorContainer, progressContainer.nextSibling);
-                } else if (cardBody) {
-                    cardBody.appendChild(errorContainer);
-                }
-            }
-            
-            // Update error content
-            const errorHtml = `
-                <div class="alert alert-danger" role="alert">
-                    <h4>${title}</h4>
-                    <p><strong>${message}</strong></p>
-                    
-                    <h6 class="mt-3">What you can do:</h6>
-                    <ul>
-                        ${suggestions.map(suggestion => `<li>${suggestion}</li>`).join('')}
-                    </ul>
-                    
-                    ${hasPartialResults ? `
-                        <div class="alert alert-warning mt-3">
-                            <strong>📦 Partial Results Available</strong><br>
-                            Some processing steps completed before the error. You can download what was processed.
-                        </div>
-                    ` : ''}
-                    
-                    <div class="mt-3">
-                        <h6>🔍 Live Console Log:</h6>
-                        <div id="console-log" style="background: #f8f9fa; padding: 10px; border-radius: 4px; max-height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; border: 1px solid #dee2e6; white-space: pre-wrap;">
-                            ${getConsoleLog()}
-                        </div>
-                    </div>
-                    
-                    ${traceback ? `
-                        <details class="mt-3">
-                            <summary><strong>Full Error Details</strong></summary>
-                            <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 12px; max-height: 300px; overflow-y: auto; white-space: pre-wrap;">${traceback}</pre>
-                        </details>
-                    ` : ''}
-                    
-                    <div class="mt-4 text-center">
-                        ${hasPartialResults ? `
-                            <button class="btn btn-warning me-2" onclick="downloadPartialResults()">
-                                📦 Download Partial Results
-                            </button>
-                        ` : ''}
-                        <button class="btn btn-outline-primary me-2" onclick="location.reload()">
-                            🔄 Refresh Page
-                        </button>
-                        <a href="/" class="btn btn-primary">
-                            🏠 Return to Home
-                        </a>
-                    </div>
-                </div>
-            `;
-            
-            errorContainer.innerHTML = errorHtml;
-            errorContainer.style.display = 'block';
-        }
-
         // Console logging for user visibility
         let consoleLog = [];
         function logToUser(message) {
@@ -487,6 +508,110 @@
             const filename = '{{ request.args.get("filename", "analysis") }}' || 'analysis';
             logToUser('ACTION: Downloading partial results...');
             window.location.href = `/download-partial?task_id=${taskId}&filename=${encodeURIComponent(filename)}`;
+        }
+
+        function updateProgress() {
+            const timestamp = new Date().toISOString();
+            logToUser(`[${timestamp}] Checking progress...`);
+            
+            fetch(`/api/progress/${taskId}`, {
+                method: 'GET',
+                headers: { 
+                    'Cache-Control': 'no-cache',
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => {
+                logToUser(`[${timestamp}] Server responded with status: ${response.status}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                const timestamp = new Date().toLocaleTimeString();
+                logToUser(`[${timestamp}] Received progress: ${data.progress}% - ${data.status}`);
+                
+                // Reset failure counters on success
+                retryCount = 0;
+                consecutiveFailures = 0;
+                lastSuccessfulUpdate = Date.now();
+                
+                // Check for failure state 
+                if (data.failed === true || data.error) {
+                    logToUser(`[ERROR] Processing failed: ${data.error || 'Unknown error'}`);
+                    showProcessingError(
+                        data.error || 'Unknown error occurred', 
+                        data.traceback || 'No traceback available', 
+                        data.has_partial_results || false
+                    );
+                    return; // STOP HERE - don't continue polling
+                }
+                
+                // Update connection status
+                updateConnectionStatus('✅ Connected and receiving updates');
+                
+                // Validate data structure
+                if (typeof data.progress === 'undefined' || data.progress === null) {
+                    throw new Error('Invalid progress data received from server');
+                }
+                
+                // Hide any error displays and show progress again
+                hideErrorDisplay();
+                showProgressDisplay();
+                
+                // Update progress display safely
+                try {
+                    updateProgressDisplay(data.progress, data.status || `Processing... ${data.progress}%`);
+                } catch (displayError) {
+                    logToUser(`[WARNING] Display update failed: ${displayError.message}`);
+                    // Continue anyway - don't let display errors stop polling
+                }
+                
+                // Check for completion
+                if (data.completed === true && data.redirect) {
+                    logToUser('[SUCCESS] Processing completed successfully! Redirecting to results...');
+                    document.getElementById('status-text').textContent = '✅ Analysis Complete! Redirecting...';
+                    hideInfoBanner();
+                    setTimeout(() => {
+                        window.location.href = data.redirect;
+                    }, 2000);
+                    return; // STOP polling - we're redirecting
+                }
+                
+                // ALWAYS continue polling unless we explicitly returned above
+                setTimeout(updateProgress, pollInterval);
+            })
+            .catch(error => {
+                consecutiveFailures++;
+                retryCount++;
+                
+                const errorMsg = `Connection attempt ${retryCount}/${maxRetries} failed: ${error.message}`;
+                logToUser(`[ERROR] ${errorMsg}`);
+                
+                // Update connection status with specific error type
+                if (error.message.includes('Failed to fetch')) {
+                    updateConnectionStatus(`❌ Network connection lost (${consecutiveFailures} failures)`);
+                    showConnectionError('network');
+                } else if (error.message.includes('timeout')) {
+                    updateConnectionStatus(`⏰ Server not responding (${consecutiveFailures} timeouts)`);
+                    showConnectionError('timeout');
+                } else {
+                    updateConnectionStatus(`⚠️ Connection error (${consecutiveFailures} failures)`);
+                    showConnectionError('general');
+                }
+                
+                // Check if we should give up
+                if (retryCount >= maxRetries) {
+                    logToUser(`[CRITICAL] Giving up after ${maxRetries} failed attempts`);
+                    showCriticalError();
+                } else {
+                    const retryDelay = Math.min(1000 * Math.pow(1.5, retryCount), 15000);
+                    logToUser(`[RETRY] Will retry in ${(retryDelay/1000).toFixed(1)} seconds...`);
+                    setTimeout(updateProgress, retryDelay);
+                }
+            });
         }
 
         // Add visibility change handling
