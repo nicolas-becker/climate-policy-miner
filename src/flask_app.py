@@ -88,9 +88,9 @@ processing_tasks = {}
 #os.environ["LANGCHAIN_PROJECT"] = "climate_policy_pipeline"
 os.environ["LANGCHAIN_TRACING_V2"] = "false" # deactivate tracing for now, as api key is required to be updated to v2: "error":"Unauthorized: Using outdated v1 api key. Please use v2 api key."
 
-# Load environment variables from .env file
-env_path = Path(__file__).resolve().parent.parent / '.env'
-load_dotenv(dotenv_path=env_path)
+# Load environment variables from .env file - for local development
+#env_path = Path(__file__).resolve().parent.parent / '.env'
+#load_dotenv(dotenv_path=env_path)
 
 # Azure OpenAI Setup 
 LLM = AzureChatOpenAI(
@@ -103,8 +103,8 @@ LLM = AzureChatOpenAI(
 # Embedding function
 # These embeddings are used for semantic search and similarity comparisons.
 EMBEDDING = AzureOpenAIEmbeddings(
-    openai_api_key=os.environ["AZURE_OPENAI_API_KEY"],
-    deployment = 'embeds'
+    openai_api_key= os.environ["AZURE_OPENAI_API_KEY"],
+    deployment = os.environ["AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME"]
     )
 
 # Default semantic search query (token-based)
@@ -924,7 +924,7 @@ For support, please provide:
     memory_file.seek(0)
     return memory_file
 
-def process_document(task_id, file_path, query_terms, filename):
+def process_document(task_id, file_path, query_terms, filename, document_pages=None, estimated_minutes=None):
     """
     Process a document in the background and update progress.
     
@@ -933,6 +933,8 @@ def process_document(task_id, file_path, query_terms, filename):
         file_path (str): Path to the PDF file
         query_terms (list): Terms to search for
         filename (str): Original filename
+        document_pages (int): Pre-calculated page count
+        estimated_minutes (int): Pre-calculated estimated processing time
     """
     try:
         # Clean up old results before starting new processing
@@ -948,22 +950,20 @@ def process_document(task_id, file_path, query_terms, filename):
             "traceback": None,
             "original_filename": filename,  # Store the original filename
             "partial_results": {},  # Store partial results,
-            "last_heartbeat": time.time()  # Add heartbeat timestamp
+            "last_heartbeat": time.time(),  # Add heartbeat timestamp
+            "estimated_time_minutes": estimated_minutes,
+            "document_pages": document_pages
         }
         
         # Start total runtime timer
         total_start_time = time.time()
         total_tokens_used = 0  # Initialize total token counter
-        
-        # Step 0: Initialize task
-        processing_tasks[task_id]["status"] = "Starting text extraction..."
-        processing_tasks[task_id]["progress"] = 5
-        processing_tasks[task_id]["last_heartbeat"] = time.time()  # Add heartbeat timestamp
 
-        # Simulate progress during long operations
-        processing_tasks[task_id]["status"] = "Analyzing document structure..."
-        processing_tasks[task_id]["progress"] = 10
-        processing_tasks[task_id]["last_heartbeat"] = time.time()
+        # Step 0: Initialize task
+        # Detect document length for time estimation
+        processing_tasks[task_id]["status"] = "Document analyzed: {} pages. Starting text extraction...".format(document_pages)
+        processing_tasks[task_id]["progress"] = 5
+        processing_tasks[task_id]["last_heartbeat"] = time.time()  
 
         # Step 1: Extract text with Unstructured (20%)
         start_time = time.time()
@@ -1151,17 +1151,57 @@ def index():
             if not file_path or not os.path.exists(file_path):
                 return render_template('index.html', error="Failed to process the PDF file.")
             
+            # Detect document length and calculate time estimate HERE
+            document_pages = "unknown"
+            estimated_minutes = "unknown"
+            time_message = ""
+
+            try:
+                doc = fitz.open(file_path)
+                document_pages = len(doc)
+                doc.close()
+
+                # Calculate estimated time using calculated regression: time = 0.2455 * pages (rounded to full minutes)
+                estimated_minutes = max(1, round(0.2455 * document_pages))  # At least 1 minute
+                
+                # Create user-friendly message
+                if document_pages <= 20:
+                    time_message = f"Should complete in about {estimated_minutes} minute{'s' if estimated_minutes > 1 else ''}"
+                    encouragement = ""
+                elif document_pages <= 50:
+                    time_message = f"Estimated processing time: {estimated_minutes} minutes"
+                    encouragement = "This is a medium-sized document."
+                elif document_pages <= 100:
+                    time_message = f"Estimated processing time: {estimated_minutes} minutes"
+                    encouragement = "This is a larger document that will take some time."
+                else:
+                    time_message = f"Estimated processing time: {estimated_minutes} minutes"
+                    encouragement = "This is a large document. Grab yourself some coffee, this might take a few minutes. ☕"
+                
+                logging.info(f"Document analysis: {filename} has {document_pages} pages, estimated time: {estimated_minutes} minutes")
+                
+            except Exception as page_detection_error:
+                logging.warning(f"Could not detect document length for {filename}: {page_detection_error}")
+                time_message = "Processing time will vary based on document size"
+                encouragement = ""
+
             # Generate a unique task ID
             task_id = str(uuid.uuid4())
             
             # Start processing in a background thread
             thread = threading.Thread(target=process_document, 
-                                    args=(task_id, file_path, query_terms, filename))
+                                    args=(task_id, file_path, query_terms, filename, document_pages, estimated_minutes))
             thread.daemon = False
             thread.start()
             
             # Redirect to progress page
-            return render_template('progress.html', task_id=task_id, original_filename=filename)
+            return render_template('progress.html', 
+                                 task_id=task_id, 
+                                 original_filename=filename,
+                                 document_pages=document_pages,
+                                 estimated_minutes=estimated_minutes,
+                                 time_message=time_message,
+                                 encouragement=encouragement)
             
         except Exception as e:
             logging.error(f"Error in index route: {e}")
@@ -1175,8 +1215,9 @@ def results(task_id):
     Display results when processing is complete
     """
     if task_id in processing_tasks and processing_tasks[task_id]["result"] is not None:
-        citations = processing_tasks[task_id]["result"]
-        original_filename = processing_tasks[task_id].get("original_filename", "analysis")
+        task = processing_tasks[task_id]
+        citations = task.get("result", [])
+        original_filename = task.get("original_filename", "analysis")
         return render_template(
             'results.html',
             citations=citations,
@@ -1186,7 +1227,13 @@ def results(task_id):
         )
     else:
         # If task doesn't exist or isn't complete, redirect to progress
-        return render_template('progress.html', task_id=task_id)
+        return render_template('progress.html', 
+                             task_id=task_id,
+                             original_filename=task.get("original_filename", "Unknown"),
+                             document_pages=task.get("document_pages", "unknown"),
+                             estimated_minutes=task.get("estimated_time_minutes", "unknown"),
+                             time_message="",
+                             encouragement="")
 
 @app.route('/api/heartbeat')
 def heartbeat():
@@ -1247,6 +1294,8 @@ def progress(task_id):
                 "traceback": task.get("traceback", "No traceback available"),
                 "has_partial_results": has_partial_results,
                 "partial_results_summary": partial_results,
+                "document_pages": task.get("document_pages", "unknown"),
+                "estimated_time_minutes": task.get("estimated_time_minutes", "unknown"),
                 "timestamp": time.time(),
                 "memory_usage": psutil.Process().memory_info().rss / 1024 / 1024
             }
@@ -1263,6 +1312,8 @@ def progress(task_id):
                 "status": "Analysis complete",
                 "completed": True,
                 "redirect": url_for('results', task_id=task_id),
+                "document_pages": task.get("document_pages", "unknown"),
+                "estimated_time_minutes": task.get("estimated_time_minutes", "unknown"),
                 "timestamp": time.time(),
                 "memory_usage": psutil.Process().memory_info().rss / 1024 / 1024
             })
@@ -1271,6 +1322,8 @@ def progress(task_id):
         response = {
             "progress": task.get("progress", 0),
             "status": task.get("status", f"Processing... {task.get('progress', 0)}%"),
+            "document_pages": task.get("document_pages", "unknown"),
+            "estimated_time_minutes": task.get("estimated_time_minutes", "unknown"),
             "timestamp": time.time(),
             "memory_usage": psutil.Process().memory_info().rss / 1024 / 1024,
             "last_heartbeat": task.get("last_heartbeat", time.time())
@@ -1424,4 +1477,4 @@ def debug_task(task_id):
 if __name__ == '__main__':
     # For Render.com, use the PORT environment variable
     port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port, debug=True)  # Set debug=True for development
+    app.run(host='0.0.0.0', port=port, debug=False)  # Set debug=True for development

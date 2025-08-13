@@ -95,7 +95,21 @@
                     <h4>📄 Document Analysis in Progress</h4>
                     <p class="mb-2">Document: <strong>{{ original_filename or 'Loading...' }}</strong></p>
                     <p class="mb-2">Task ID: <code>{{ task_id }} (for debugging purposes)</code></p>
-                    <p>Your document is being analyzed. Large documents may take 10-20 minutes.</p>
+                    <!-- Pre-calculated document information -->
+                    {% if document_pages != "unknown" and estimated_minutes != "unknown" %}
+                        <div class="alert alert-secondary mt-3">
+                            <h5>📊 Your document is being analyzed:</h5>
+                            <p class="mb-1">📄 <strong>{{ document_pages }} pages</strong> detected</p>
+                            <p class="mb-1">⏱️ <strong>{{ estimated_minutes }} minute{{ 's' if estimated_minutes > 1 else '' }}</strong> estimated</p>
+                            {% if encouragement %}
+                                <p class="mb-0 text-muted">{{ encouragement }}</p>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-secondary mt-3">
+                            <p class="mb-0">⏱️ Processing time will vary based on document size</p>
+                        </div>
+                    {% endif %}
                     <p><strong>Please keep this window open.</strong></p>
                 </div>
 
@@ -153,7 +167,7 @@
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    
+
     <script>
         const taskId = '{{ task_id }}';
         let pollInterval = 2000;
@@ -485,7 +499,7 @@ URL: ${window.location.href}
                 if (statusText) {
                     statusText.textContent = status;
                 }
-                
+
                 document.title = `${progress}% - Processing Document`;
             } catch (error) {
                 logToUser(`ERROR: Failed to update progress display: ${error.message}`);
