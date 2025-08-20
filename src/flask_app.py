@@ -89,8 +89,8 @@ processing_tasks = {}
 os.environ["LANGCHAIN_TRACING_V2"] = "false" # deactivate tracing for now, as api key is required to be updated to v2: "error":"Unauthorized: Using outdated v1 api key. Please use v2 api key."
 
 # Load environment variables from .env file - for local development
-env_path = Path(__file__).resolve().parent.parent / '.env'
-load_dotenv(dotenv_path=env_path)
+#env_path = Path(__file__).resolve().parent.parent / '.env'
+#load_dotenv(dotenv_path=env_path)
 
 # Azure OpenAI Setup 
 LLM = AzureChatOpenAI(
@@ -168,6 +168,18 @@ def download_pdf_from_url(url, save_dir):
         filename = secure_filename(filename)
         if not filename:
             filename = 'downloaded_document.pdf'
+
+        # Limit filename length to 60 characters (including extension)
+        MAX_FILENAME_LENGTH = 60
+        name, ext = os.path.splitext(filename)
+        ext = ext if ext else '.pdf'
+        # Remove unnecessary characters (spaces, underscores, dashes, etc.) if too long
+        if len(filename) > MAX_FILENAME_LENGTH:
+            # Remove common URL encodings and unwanted characters
+            name = re.sub(r'%20|%27|%28|%29|[\s_-]+', '', name)
+            # Truncate if still too long
+            name = name[:MAX_FILENAME_LENGTH - len(ext)]
+            filename = name + ext
         
         # Save the file
         file_path = os.path.join(save_dir, filename)
