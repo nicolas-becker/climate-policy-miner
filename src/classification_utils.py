@@ -315,7 +315,7 @@ class MitigationObject_MSDM_FewShot(BaseModel):
     S_Sharedmob: str = Field(description="Measure concerning General shared mobility. This includes general measures in the area of shared mobility, such as bike sharing, car-sharing, shared scooters, etc.", enum=["True", "False"])
     #S_Ondemand: str = Field(description="Measure concerning On-demand transport", enum=["True", "False"])
     #S_Maas: str = Field(description="Measure concerning Mobility-as-a-Service (MaaS)", enum=["True", "False"])
-    I_Other: str = Field(description="Measure concerning General innovations and digitalization in transport. This category includes activities that mention the use of innovation and digitalization to improve the efficiency of transport. <example>promote research and innovation and help urban transport flow more freely and cleanly </example>", enum=["True", "False"])
+    I_Other: str = Field(description="Measure concerning General innovations and digitalization in transport", enum=["True", "False"])
     I_ITS: str = Field(description="Measure concerning Intelligent Transport Systems (ITS). This refers to transport systems that harness technology to improve the management and operation of transport services. Relevant technologies include sensors, wireless communications, notification systems and other ICT solutions.", enum=["True", "False"])
     I_Autonomous: str = Field(description="Measure concerning Autonomous Vehicles (AVs). This refers to measures that promote self-driving vehicles, artificial intelligence and any other mechanisms that support the automation of passenger and freight transport.", enum=["True", "False"])
     I_DataModelling: str = Field(description="Measure concerning Data & modelling improvements. Refers to measures related to transport data (e.g. collection, analysis or application) as well as models designed to predict traffic flows or transport demand growth.", enum=["True", "False"])
@@ -1307,7 +1307,7 @@ def tagging_classifier_quotes(quotes_dict, llm, fewshot = True):
 
     """
     # initialize output dataframes
-    output_df = pd.DataFrame(columns=['document', 'page', 'info_type', 'quote', 'target_labels', 'measure_labels', 'target_area', 'ghg_target', 'conditionality'])
+    output_df = pd.DataFrame(columns=['document', 'page', 'info_type', 'quote', 'target_labels', 'measure_labels', 'target_area', 'ghg_target', 'conditionality', 'category', 'purpose', 'instrument', 'asi'])
     
     for key, value in quotes_dict.items():
         
@@ -1330,6 +1330,10 @@ def tagging_classifier_quotes(quotes_dict, llm, fewshot = True):
                 entry.append('NONE') #placeholder for target_area
                 entry.append('NONE') #placeholder for ghg_target
                 entry.append('NONE') #placeholder for conditionality
+                entry.append('NONE') #placeholder for category
+                entry.append('NONE') #placeholder for purpose
+                entry.append('NONE') #placeholder for instrument
+                entry.append('NONE') #placeholder for asi
                 output_df.loc[len(output_df.index)] = entry
                 
     if fewshot:
@@ -1348,6 +1352,13 @@ def tagging_classifier_quotes(quotes_dict, llm, fewshot = True):
         output_df['conditionality'] = output_df.apply(lambda row : conditionality_mapping(row), axis=1)
 
         output_df['measure_labels'] = output_df.apply(lambda row : measure_mapping(row), axis=1)
+        # Explode measure_labels so each label gets its own row
+        output_df = output_df.explode('measure_labels').reset_index(drop=True)
+        output_df['instrument'] = output_df.apply(lambda row : instrument_mapping(row), axis=1)
+        output_df['purpose'] = output_df.apply(lambda row : purpose_mapping(row), axis=1)
+        output_df['category'] = output_df.apply(lambda row : category_mapping(row), axis=1)
+        output_df['asi'] = output_df.apply(lambda row : asi_mapping(row), axis=1)
+
     except Exception:
         logger.exception('Error while applying label mappers')
     return output_df
@@ -1468,7 +1479,18 @@ def safe_bool_check(value):
 
 #NEW
 def target_area_mapping(row):
-    """Target Area attribution according to the tagging results."""
+    """Target Area attribution according to the tagging results.
+
+    Parameters
+    ----------
+    row : pd.Series
+        Row of a Dataframe containing the tagging results.
+
+    Returns
+    -------
+    target_area : string
+        Applicable target area according to taxonomy used by NDC Tracker for the specified row.
+    """
     try:
         target_area = '--'
         
@@ -1508,21 +1530,21 @@ def ghg_target_mapping(row):
 
     Returns
     -------
-    ghg_target_area : string
-        Applicable target area according to taxonomy used by NDC Tracker for the specified row.
+    ghg_target : string
+        Applicable ghg tagging according to taxonomy used by NDC Tracker for the specified row.
     """
     try:
-        ghg_target_area = '--'
-        
+        ghg_target = '--'
+
         # Use safe boolean check instead of string comparison
         ghg = safe_bool_check(row.get('ghg', False))
         
         if ghg:
-            ghg_target_area = 'GHG'
+            ghg_target = 'GHG'
         else:
-            ghg_target_area = 'Non-GHG'
+            ghg_target = 'Non-GHG'
 
-        return ghg_target_area
+        return ghg_target
     except Exception as e:
         print(f"Error in ghg_target_mapping: {e}")
         return '--'
@@ -1563,6 +1585,655 @@ def conditionality_mapping(row):
         print(f"Error in conditionality_mapping: {e}")
         return '--'
 
+#NEW
+def instrument_mapping(row):
+    """
+    Instrument attribution according to the tagging results.
+
+    Parameters
+    ----------
+    row : pd.Series
+        Row of a Dataframe containing the tagging results.
+
+    Returns
+    -------
+    instrument : string
+        Applicable instrument according to taxonomy used by NDC Tracker for the specified row.
+    """
+    try:
+        instrument = '--'
+
+        # Check if the row indicates a mitigation measure
+        if safe_bool_check(row.get('mitigation_measure', False)):
+
+            # Use measure_labels for instrument mapping
+            if row.get('measure_labels') == 'A_TDM':
+                instrument = 'Transport demand management measures'
+            elif row.get('measure_labels') == 'A_Caraccess':
+                instrument = 'Car access restriction and low emission zones'
+            elif row.get('measure_labels') == 'A_Commute':
+                instrument = 'Commuter trip reduction policies'
+            elif row.get('measure_labels') == 'S_Parking':
+                instrument = 'Parking measures'
+            elif row.get('measure_labels') == 'A_Economic':
+                instrument = 'General economic instruments'
+            elif row.get('measure_labels') == 'A_Emistrad':
+                instrument = 'Emissions trading and carbon pricing'
+            elif row.get('measure_labels') == 'A_Finance':
+                instrument = 'Financial instruments to support decarbonisation'
+            elif row.get('measure_labels') == 'A_Fossilfuelsubs':
+                instrument = 'Fossil fuel subsidy elimination'
+            elif row.get('measure_labels') == 'A_Fueltax':
+                instrument = 'Fuel taxation'
+            elif row.get('measure_labels') == 'A_Procurement':
+                instrument = 'Green public procurement'
+            elif row.get('measure_labels') == 'A_Roadcharging':
+                instrument = 'Road charging and tolls'
+            elif row.get('measure_labels') == 'A_Vehicletax':
+                instrument = 'Vehicle taxation'
+            elif row.get('measure_labels') == 'I_Autonomous':
+                instrument = 'Measures supporting autonomous vehicles'
+            elif row.get('measure_labels') == 'I_DataModelling':
+                instrument = 'Data and modelling improvements'
+            elif row.get('measure_labels') == 'I_Other':
+                instrument = 'General innovations and digitalization'
+            elif row.get('measure_labels') == 'I_ITS':
+                instrument = 'Intelligent transport systems'
+            elif row.get('measure_labels') == 'S_Sharedmob':
+                instrument = 'Shared mobility'
+            elif row.get('measure_labels') == 'S_Activemobility':
+                instrument = 'General active mobility'
+            elif row.get('measure_labels') == 'S_Cycling':
+                instrument = 'Cycling measures'
+            elif row.get('measure_labels') == 'S_Walking':
+                instrument = 'Walking measures'
+            elif row.get('measure_labels') == 'S_BRT':
+                instrument = 'BRT'
+            elif row.get('measure_labels') == 'S_PTIntegration':
+                instrument = 'Public transport integration and expansion'
+            elif row.get('measure_labels') == 'S_PTPriority':
+                instrument = 'Express lanes/ public transport priority'
+            elif row.get('measure_labels') == 'S_PublicTransport':
+                instrument = 'General public transport improvement'
+            elif row.get('measure_labels') == 'A_Complan':
+                instrument = 'General transport and land use planning'
+            elif row.get('measure_labels') == 'A_LATM':
+                instrument = 'Traffic management improvements'
+            elif row.get('measure_labels') == 'A_Natmobplan':
+                instrument = 'National mobility plans'
+            elif row.get('measure_labels') == 'A_SUMP':
+                instrument = 'Sustainable urban mobility plans'
+            elif row.get('measure_labels') == 'A_Mixuse':
+                instrument = 'Access improvement instruments (density, mixed use)'
+            elif row.get('measure_labels') == 'S_Infraexpansion':
+                instrument = 'Expansion of infrastructure'
+            elif row.get('measure_labels') == 'S_Infraimprove':
+                instrument = 'Infrastructure improvements'
+            elif row.get('measure_labels') == 'S_Intermodality':
+                instrument = 'Intermodality measures'
+            elif row.get('measure_labels') == 'I_Freighteff':
+                instrument = 'General freight efficiency improvements'
+            elif row.get('measure_labels') == 'I_Load':
+                instrument = 'Improving load'
+            elif row.get('measure_labels') == 'S_Railfreight':
+                instrument = 'Freight transport shifting to rail of inland waterways'
+            elif row.get('measure_labels') == 'I_Ecodriving':
+                instrument = 'Ecodriving'
+            elif row.get('measure_labels') == 'I_Education':
+                instrument = 'General education and behavior change'
+            elif row.get('measure_labels') == 'I_Vehiclelabel':
+                instrument = 'Labelling requirements'
+            elif row.get('measure_labels') == 'I_Efficiencystd':
+                instrument = 'Vehicle air pollution emission standards'
+            elif row.get('measure_labels') == 'I_Fuelqualimprove':
+                instrument = 'Fuel quality improvements'
+            elif row.get('measure_labels') == 'I_Inspection':
+                instrument = 'Inspection and maintenance'
+            elif row.get('measure_labels') == 'I_Vehicleeff':
+                instrument = 'Vehicle efficiency standards'
+            elif row.get('measure_labels') == 'I_Vehicleimprove':
+                instrument = 'General vehicle improvement measures'
+            elif row.get('measure_labels') == 'I_VehicleRestrictions':
+                instrument = 'Vehicle restrictions (import, age, access, sale, taxation)'
+            elif row.get('measure_labels') == 'I_Vehiclescrappage':
+                instrument = 'Vehicle scrappage scheme'
+            elif row.get('measure_labels') == 'I_Emobility':
+                instrument = 'General e-mobility measures'
+            elif row.get('measure_labels') == 'I_Emobilitycharging':
+                instrument = 'EV charging infrastructure measures'
+            elif row.get('measure_labels') == 'I_Emobilitypurchase':
+                instrument = 'EV purchase incentives'
+            elif row.get('measure_labels') == 'I_Smartcharging':
+                instrument = 'Smart charging policies'
+            elif row.get('measure_labels') == 'S_Micromobility':
+                instrument = 'General micromobility'
+            elif row.get('measure_labels') == 'I_Altfuels':
+                instrument = 'General alternative fuels measures'
+            elif row.get('measure_labels') == 'I_Lowemissionincentive':
+                instrument = 'Low emission vehicle purchase incentives'
+            elif row.get('measure_labels') == 'I_Biofuel':
+                instrument = 'Biofuels support measures'
+            elif row.get('measure_labels') == 'I_Hydrogen':
+                instrument = 'Hydrogen support measures'
+            elif row.get('measure_labels') == 'I_LPGCNGLNG':
+                instrument = 'LPG/CNG/LNG support measures'
+            elif row.get('measure_labels') == 'I_ICEdiesel':
+                instrument = 'ICE (gasoline and diesel) bans'
+            elif row.get('measure_labels') == 'I_RE':
+                instrument = 'General renewable energy support measures'
+            elif row.get('measure_labels') == 'I_Aircraftfleet':
+                instrument = 'Aircraft fleet renovation'
+            elif row.get('measure_labels') == 'I_Airtraffic':
+                instrument = 'Air traffic management'
+            elif row.get('measure_labels') == 'I_Aviation':
+                instrument = 'General aviation improvements'
+            elif row.get('measure_labels') == 'I_CO2certificate':
+                instrument = 'Airport CO2 certification'
+            elif row.get('measure_labels') == 'I_Jetfuel':
+                instrument = 'Jet fuel policies'
+            elif row.get('measure_labels') == 'I_Onshorepower':
+                instrument = 'Support on-shore power and electric charging facilities in ports'
+            elif row.get('measure_labels') == 'I_PortInfra':
+                instrument = 'Port infrastructure improvements'
+            elif row.get('measure_labels') == 'I_Shipefficiency':
+                instrument = 'Ship efficiency improvements'
+            elif row.get('measure_labels') == 'I_Shipping':
+                instrument = 'General shipping improvement'
+            else:
+                instrument = 'No concrete instrument'
+
+        # Check if the row indicates a adaptation measure
+        if safe_bool_check(row.get('adaptation_measure', False)):
+            
+            if row.get('measure_labels') == 'R_Infrares':
+                instrument = 'Transport Infrastructure Resilience'
+            elif row.get('measure_labels') == 'R_System':
+                instrument = 'Transport System Adaptation'
+            elif row.get('measure_labels') == 'R_Risk':
+                instrument = 'Risk assessment'
+            elif row.get('measure_labels') == 'R_Tech':
+                instrument = 'Resilient transport technologies'
+            elif row.get('measure_labels') == 'R_Maintain':
+                instrument = 'Repair and maintenance'
+            elif row.get('measure_labels') == 'R_Monitoring':
+                instrument = 'Monitoring'
+            elif row.get('measure_labels') == 'R_Education':
+                instrument = 'Education and Training'
+            elif row.get('measure_labels') == 'R_Emergency':
+                instrument = 'Early warning & emergency planning'
+            elif row.get('measure_labels') == 'R_Planning':
+                instrument = 'Transport Planning'
+            elif row.get('measure_labels') == 'R_Relocation':
+                instrument = 'Relocation'
+            elif row.get('measure_labels') == 'R_Redundancy':
+                instrument = 'Redundancy'
+            elif row.get('measure_labels') == 'R_Laws':
+                instrument = 'Transport adaptation regulation'
+            elif row.get('measure_labels') == 'R_Design':
+                instrument = 'Design Standards and updates'
+            elif row.get('measure_labels') == 'R_Other':
+                instrument = 'Other adaptation measures'
+            else:
+                instrument = 'No concrete instrument'
+
+        return instrument
+    except Exception as e:
+        print(f"Error in instrument_mapping: {e}")
+        return '--'
+
+#NEW
+def purpose_mapping(row):
+    """
+    Purpose attribution according to the tagging results.
+
+    Parameters
+    ----------
+    row : pd.Series
+        Row of a Dataframe containing the tagging results.
+
+    Returns
+    -------
+    purpose_area : string
+        Applicable purpose according to taxonomy used by NDC Tracker for the specified row.
+    """
+    try:
+        purpose_area = '--'
+        
+        # Check if the row indicates a mitigation measure
+        if safe_bool_check(row.get('mitigation_measure', False)):
+
+            # Use measure_labels for purpose mapping
+            # Transport Demand Management (P_TDM)
+            if row.get('measure_labels') == 'A_TDM':
+                purpose_area = 'Transport demand management'
+            elif row.get('measure_labels') == 'A_Caraccess':
+                purpose_area = 'Transport demand management'
+            elif row.get('measure_labels') == 'A_Commute':
+                purpose_area = 'Transport demand management'
+            elif row.get('measure_labels') == 'S_Parking':
+                purpose_area = 'Transport demand management'
+            
+            # Economic conditions for sustainable transport (P_Sustainable)
+            elif row.get('measure_labels') == 'A_Economic':
+                purpose_area = 'Economic conditions for sustainable transport'
+            elif row.get('measure_labels') == 'A_Emistrad':
+                purpose_area = 'Economic conditions for sustainable transport'
+            elif row.get('measure_labels') == 'A_Finance':
+                purpose_area = 'Economic conditions for sustainable transport'
+            elif row.get('measure_labels') == 'A_Fossilfuelsubs':
+                purpose_area = 'Economic conditions for sustainable transport'
+            elif row.get('measure_labels') == 'A_Fueltax':
+                purpose_area = 'Economic conditions for sustainable transport'
+            elif row.get('measure_labels') == 'A_Procurement':
+                purpose_area = 'Economic conditions for sustainable transport'
+            elif row.get('measure_labels') == 'A_Roadcharging':
+                purpose_area = 'Economic conditions for sustainable transport'
+            elif row.get('measure_labels') == 'A_Vehicletax':
+                purpose_area = 'Economic conditions for sustainable transport'
+            
+            # Digital solutions (P_DigitalEff)
+            elif row.get('measure_labels') == 'I_Autonomous':
+                purpose_area = 'Digital solutions'
+            elif row.get('measure_labels') == 'I_DataModelling':
+                purpose_area = 'Digital solutions'
+            elif row.get('measure_labels') == 'I_Other':
+                purpose_area = 'Digital solutions'
+            elif row.get('measure_labels') == 'I_ITS':
+                purpose_area = 'Digital solutions'
+            elif row.get('measure_labels') == 'S_Sharedmob':
+                purpose_area = 'Digital solutions'
+            
+            # Promote active mobility (P_Active)
+            elif row.get('measure_labels') == 'S_Activemobility':
+                purpose_area = 'Promote active mobility'
+            elif row.get('measure_labels') == 'S_Cycling':
+                purpose_area = 'Promote active mobility'
+            elif row.get('measure_labels') == 'S_Walking':
+                purpose_area = 'Promote active mobility'
+            
+            # Public transport improvement (P_Public)
+            elif row.get('measure_labels') == 'S_BRT':
+                purpose_area = 'Public transport improvement'
+            elif row.get('measure_labels') == 'S_PTIntegration':
+                purpose_area = 'Public transport improvement'
+            elif row.get('measure_labels') == 'S_PTPriority':
+                purpose_area = 'Public transport improvement'
+            elif row.get('measure_labels') == 'S_PublicTransport':
+                purpose_area = 'Public transport improvement'
+            
+            # Enhance comprehensive transport planning (P_Planning)
+            elif row.get('measure_labels') == 'A_Complan':
+                purpose_area = 'Enhance comprehensive transport planning'
+            elif row.get('measure_labels') == 'A_LATM':
+                purpose_area = 'Enhance comprehensive transport planning'
+            elif row.get('measure_labels') == 'A_Natmobplan':
+                purpose_area = 'Enhance comprehensive transport planning'
+            elif row.get('measure_labels') == 'A_SUMP':
+                purpose_area = 'Enhance comprehensive transport planning'
+            elif row.get('measure_labels') == 'A_Mixuse':
+                purpose_area = 'Enhance comprehensive transport planning'
+            
+            # Improve infrastructure (P_Infrastructure)
+            elif row.get('measure_labels') == 'S_Infraexpansion':
+                purpose_area = 'Improve infrastructure'
+            elif row.get('measure_labels') == 'S_Infraimprove':
+                purpose_area = 'Improve infrastructure'
+            elif row.get('measure_labels') == 'S_Intermodality':
+                purpose_area = 'Improve infrastructure'
+            
+            # Freight efficiency improvements (P_Freight)
+            elif row.get('measure_labels') == 'I_Freighteff':
+                purpose_area = 'Freight efficiency improvements'
+            elif row.get('measure_labels') == 'I_Load':
+                purpose_area = 'Freight efficiency improvements'
+            elif row.get('measure_labels') == 'S_Railfreight':
+                purpose_area = 'Freight efficiency improvements'
+            
+            # Education and behavioral change (P_Education)
+            elif row.get('measure_labels') == 'I_Ecodriving':
+                purpose_area = 'Education and behavioral change'
+            elif row.get('measure_labels') == 'I_Education':
+                purpose_area = 'Education and behavioral change'
+            
+            # Promote vehicle improvements (P_Vehicles)
+            elif row.get('measure_labels') == 'I_Vehiclelabel':
+                purpose_area = 'Promote vehicle improvements'
+            elif row.get('measure_labels') == 'I_Efficiencystd':
+                purpose_area = 'Promote vehicle improvements'
+            elif row.get('measure_labels') == 'I_Fuelqualimprove':
+                purpose_area = 'Promote vehicle improvements'
+            elif row.get('measure_labels') == 'I_Inspection':
+                purpose_area = 'Promote vehicle improvements'
+            elif row.get('measure_labels') == 'I_Vehicleeff':
+                purpose_area = 'Promote vehicle improvements'
+            elif row.get('measure_labels') == 'I_Vehicleimprove':
+                purpose_area = 'Promote vehicle improvements'
+            elif row.get('measure_labels') == 'I_VehicleRestrictions':
+                purpose_area = 'Promote vehicle improvements'
+            elif row.get('measure_labels') == 'I_Vehiclescrappage':
+                purpose_area = 'Promote vehicle improvements'
+            
+            # Promote electric mobility (P_Electric)
+            elif row.get('measure_labels') == 'I_Emobility':
+                purpose_area = 'Promote electric mobility'
+            elif row.get('measure_labels') == 'I_Emobilitycharging':
+                purpose_area = 'Promote electric mobility'
+            elif row.get('measure_labels') == 'I_Emobilitypurchase':
+                purpose_area = 'Promote electric mobility'
+            elif row.get('measure_labels') == 'I_Smartcharging':
+                purpose_area = 'Promote electric mobility'
+            elif row.get('measure_labels') == 'S_Micromobility':
+                purpose_area = 'Promote electric mobility'
+            
+            # Promote alternative fuels (P_Altfuel)
+            elif row.get('measure_labels') == 'I_Altfuels':
+                purpose_area = 'Promote alternative fuels'
+            elif row.get('measure_labels') == 'I_Lowemissionincentive':
+                purpose_area = 'Promote alternative fuels'
+            elif row.get('measure_labels') == 'I_Biofuel':
+                purpose_area = 'Promote alternative fuels'
+            elif row.get('measure_labels') == 'I_Hydrogen':
+                purpose_area = 'Promote alternative fuels'
+            elif row.get('measure_labels') == 'I_LPGCNGLNG':
+                purpose_area = 'Promote alternative fuels'
+            elif row.get('measure_labels') == 'I_ICEdiesel':
+                purpose_area = 'Promote alternative fuels'
+            elif row.get('measure_labels') == 'I_RE':
+                purpose_area = 'Promote alternative fuels'
+            
+            # Promote improvements in aviation (P_Aviation)
+            elif row.get('measure_labels') == 'I_Aircraftfleet':
+                purpose_area = 'Promote improvements in aviation'
+            elif row.get('measure_labels') == 'I_Airtraffic':
+                purpose_area = 'Promote improvements in aviation'
+            elif row.get('measure_labels') == 'I_Aviation':
+                purpose_area = 'Promote improvements in aviation'
+            elif row.get('measure_labels') == 'I_CO2certificate':
+                purpose_area = 'Promote improvements in aviation'
+            elif row.get('measure_labels') == 'I_Jetfuel':
+                purpose_area = 'Promote improvements in aviation'
+            
+            # Promote improvements in shipping (P_Shipping)
+            elif row.get('measure_labels') == 'I_Onshorepower':
+                purpose_area = 'Promote improvements in shipping'
+            elif row.get('measure_labels') == 'I_PortInfra':
+                purpose_area = 'Promote improvements in shipping'
+            elif row.get('measure_labels') == 'I_Shipefficiency':
+                purpose_area = 'Promote improvements in shipping'
+            elif row.get('measure_labels') == 'I_Shipping':
+                purpose_area = 'Promote improvements in shipping'
+            
+            else:
+                purpose_area = 'No concrete purpose'
+
+        return purpose_area
+        
+    except Exception as e:
+        print(f"Error in purpose_mapping: {e}")
+        return '--'
+#NEW
+def category_mapping(row):
+    """
+    Category attribution based on the already identified purpose.
+
+    Parameters
+    ----------
+    row : pd.Series
+        Row of a Dataframe containing the tagging results.
+
+    Returns
+    -------
+    category_area : string
+        Applicable category according to taxonomy used by NDC Tracker for the specified row.
+    """
+    try:
+        
+        # Check if the row indicates a mitigation measure
+        if safe_bool_check(row.get('mitigation_measure', False)):
+
+            # Get the purpose that was already calculated
+            purpose = row.get('purpose', '--')
+
+            # Map purpose to category based on your taxonomy
+            purpose_to_category = {
+                'Transport demand management': 'Mode shift and demand management',
+                'Economic conditions for sustainable transport': 'Mode shift and demand management',
+                'Digital solutions': 'Mode shift and demand management',
+                'Promote active mobility': 'Mode shift and demand management',
+                'Public transport improvement': 'Mode shift and demand management',
+                
+                'Enhance comprehensive transport planning': 'Transport system improvements',
+                'Improve infrastructure': 'Transport system improvements',
+                'Freight efficiency improvements': 'Transport system improvements',
+                'Education and behavioral change': 'Transport system improvements',
+                
+                'Promote vehicle improvements': 'Energy efficiency',
+                
+                'Promote electric mobility': 'Electrification',
+                
+                'Promote alternative fuels': 'Alternative fuels',
+                
+                'Promote improvements in aviation': 'Aviation and maritime',
+                'Promote improvements in shipping': 'Aviation and maritime',
+
+                'No concrete purpose': 'No concrete category'
+            }
+            
+            return purpose_to_category.get(purpose, 'No concrete category')
+        
+        
+        if safe_bool_check(row.get('adaptation_measure', False)):
+
+            # Get the instrument that was already defined
+            instrument = row.get('instrument', '--')
+
+            # Map purpose to category based on your taxonomy
+            instrument_to_category = {
+                
+                'Transport Infrastructure Resilience': 'Structural and Technical',
+                'Transport System Adaptation': 'Structural and Technical',
+                'Risk assessment': 'Structural and Technical',
+                'Resilient transport technologies': 'Structural and Technical',
+                'Repair and maintenance': 'Structural and Technical',
+
+                'Monitoring': 'Informational and Educational',
+                'Education and Training': 'Informational and Educational',
+                'Early warning & emergency planning': 'Informational and Educational',
+
+                'Transport Planning': 'Institutional and Regulatory',
+                'Relocation': 'Institutional and Regulatory',
+                'Redundancy': 'Institutional and Regulatory',
+                'Transport adaptation regulation': 'Institutional and Regulatory',
+                'Design Standards and updates': 'Institutional and Regulatory',
+
+                'Other adaptation measures': 'Other adaptation and resilience measures',
+
+                'No concrete purpose': 'No concrete category'
+            }
+            
+            return instrument_to_category.get(instrument, 'No concrete category')
+
+
+        # If not a mitigation measure, return empty
+        return '--'
+    
+    except Exception as e:
+        print(f"Error in category_mapping: {e}")
+        return '--'
+    
+#NEW
+def asi_mapping(row):
+    """
+    ASI (Avoid-Shift-Improve) attribution according to the tagging results.
+
+    Parameters
+    ----------
+    row : pd.Series
+        Row of a Dataframe containing the tagging results.
+
+    Returns
+    -------
+    asi_category : string
+        Applicable ASI category according to the transport policy framework for the specified row.
+    """
+    try:
+        asi_category = '--'
+        
+        # Check if the row indicates a mitigation measure
+        if safe_bool_check(row.get('mitigation_measure', False)):
+
+            # Use measure_labels for ASI mapping
+            # AVOID measures - reduce need to travel and shorten distances
+            if row.get('measure_labels') == 'A_TDM':
+                asi_category = 'Avoid'  # General transport demand management
+            elif row.get('measure_labels') == 'A_Commute':
+                asi_category = 'Avoid'  # Commuter trip reduction
+            elif row.get('measure_labels') == 'I_DataModelling':
+                asi_category = 'Avoid'  # Data/modeling for demand management
+            elif row.get('measure_labels') == 'I_Other':
+                asi_category = 'Avoid'  # Digital solutions/telework
+            
+            # AVOID, SHIFT measures - spatial measures that reduce travel AND encourage mode shift
+            elif row.get('measure_labels') == 'A_Mixuse':
+                asi_category = 'Avoid, shift'  # Mixed use reduces travel distances AND encourages walking/cycling
+            elif row.get('measure_labels') == 'A_LATM':
+                asi_category = 'Avoid, shift'  # Traffic management can reduce demand and shift modes
+            elif row.get('measure_labels') == 'I_Education':
+                asi_category = 'Avoid, shift'  # Education can reduce travel AND encourage mode shift
+            
+            # SHIFT measures - mode shift from high to low emission modes
+            elif row.get('measure_labels') == 'A_Caraccess':
+                asi_category = 'Shift'  # Car access restrictions push away from cars
+            elif row.get('measure_labels') == 'S_Parking':
+                asi_category = 'Shift'  # Parking measures discourage car use
+            elif row.get('measure_labels') == 'A_Economic':
+                asi_category = 'Shift'  # Economic instruments for mode shift
+            elif row.get('measure_labels') == 'A_Emistrad':
+                asi_category = 'Shift'  # Carbon pricing encourages mode shift
+            elif row.get('measure_labels') == 'A_Finance':
+                asi_category = 'Shift'  # Financial support for sustainable modes
+            elif row.get('measure_labels') == 'A_Fossilfuelsubs':
+                asi_category = 'Shift'  # Subsidy elimination encourages mode shift
+            elif row.get('measure_labels') == 'A_Fueltax':
+                asi_category = 'Shift'  # Fuel taxation discourages car use
+            elif row.get('measure_labels') == 'A_Procurement':
+                asi_category = 'Shift'  # Green procurement for public fleets
+            elif row.get('measure_labels') == 'A_Roadcharging':
+                asi_category = 'Shift'  # Road charging discourages car use
+            elif row.get('measure_labels') == 'A_Vehicletax':
+                asi_category = 'Shift'  # Vehicle taxes discourage car ownership
+            elif row.get('measure_labels') == 'S_Activemobility':
+                asi_category = 'Shift'  # Active mobility encourages walking/cycling
+            elif row.get('measure_labels') == 'S_Cycling':
+                asi_category = 'Shift'  # Cycling infrastructure encourages cycling
+            elif row.get('measure_labels') == 'S_Walking':
+                asi_category = 'Shift'  # Walking infrastructure encourages walking
+            elif row.get('measure_labels') == 'S_BRT':
+                asi_category = 'Shift'  # BRT encourages public transport use
+            elif row.get('measure_labels') == 'S_PTIntegration':
+                asi_category = 'Shift'  # PT integration encourages public transport
+            elif row.get('measure_labels') == 'S_PTPriority':
+                asi_category = 'Shift'  # PT priority encourages public transport
+            elif row.get('measure_labels') == 'S_PublicTransport':
+                asi_category = 'Shift'  # General PT improvements encourage use
+            elif row.get('measure_labels') == 'S_Sharedmob':
+                asi_category = 'Shift'  # Shared mobility replaces private car use
+            elif row.get('measure_labels') == 'S_Railfreight':
+                asi_category = 'Shift'  # Freight mode shift to rail
+            
+            # SHIFT, IMPROVE measures - infrastructure that enables mode shift AND improves efficiency
+            elif row.get('measure_labels') == 'S_Infraexpansion':
+                asi_category = 'Shift, improve'  # New infrastructure enables mode shift and improves system
+            elif row.get('measure_labels') == 'S_Infraimprove':
+                asi_category = 'Shift, improve'  # Infrastructure improvements enable better service
+            elif row.get('measure_labels') == 'S_Intermodality':
+                asi_category = 'Shift, improve'  # Intermodality enables mode shift and system efficiency
+            elif row.get('measure_labels') == 'I_ITS':
+                asi_category = 'Shift, improve'  # ITS can encourage PT use AND improve efficiency
+            elif row.get('measure_labels') == 'I_Autonomous':
+                asi_category = 'Shift, improve'  # Can enable shared mobility AND improve efficiency
+            elif row.get('measure_labels') == 'S_Micromobility':
+                asi_category = 'Shift, improve'  # Replaces car trips AND uses efficient electric technology
+            
+            # IMPROVE measures - increase energy efficiency and reduce GHG footprint
+            elif row.get('measure_labels') == 'I_Vehiclelabel':
+                asi_category = 'Improve'  # Information for better vehicle choices
+            elif row.get('measure_labels') == 'I_Efficiencystd':
+                asi_category = 'Improve'  # Air pollution standards improve emissions
+            elif row.get('measure_labels') == 'I_Fuelqualimprove':
+                asi_category = 'Improve'  # Better fuel quality improves efficiency
+            elif row.get('measure_labels') == 'I_Inspection':
+                asi_category = 'Improve'  # Maintenance improves vehicle efficiency
+            elif row.get('measure_labels') == 'I_Vehicleeff':
+                asi_category = 'Improve'  # Vehicle efficiency standards
+            elif row.get('measure_labels') == 'I_Vehicleimprove':
+                asi_category = 'Improve'  # General vehicle improvements
+            elif row.get('measure_labels') == 'I_VehicleRestrictions':
+                asi_category = 'Improve'  # Restrictions encourage cleaner vehicles
+            elif row.get('measure_labels') == 'I_Vehiclescrappage':
+                asi_category = 'Improve'  # Scrappage promotes newer, cleaner vehicles
+            elif row.get('measure_labels') == 'I_Emobility':
+                asi_category = 'Improve'  # E-mobility is zero-emission technology
+            elif row.get('measure_labels') == 'I_Emobilitycharging':
+                asi_category = 'Improve'  # EV charging enables zero-emission transport
+            elif row.get('measure_labels') == 'I_Emobilitypurchase':
+                asi_category = 'Improve'  # EV purchase incentives promote zero-emission
+            elif row.get('measure_labels') == 'I_Smartcharging':
+                asi_category = 'Improve'  # Smart charging optimizes energy use
+            elif row.get('measure_labels') == 'I_Altfuels':
+                asi_category = 'Improve'  # Alternative fuels reduce carbon intensity
+            elif row.get('measure_labels') == 'I_Lowemissionincentive':
+                asi_category = 'Improve'  # Incentives for cleaner vehicles
+            elif row.get('measure_labels') == 'I_Biofuel':
+                asi_category = 'Improve'  # Biofuels reduce carbon intensity
+            elif row.get('measure_labels') == 'I_Hydrogen':
+                asi_category = 'Improve'  # Hydrogen is zero-emission fuel
+            elif row.get('measure_labels') == 'I_LPGCNGLNG':
+                asi_category = 'Improve'  # LPG/CNG/LNG lower carbon than gasoline/diesel
+            elif row.get('measure_labels') == 'I_ICEdiesel':
+                asi_category = 'Improve'  # ICE bans promote zero-emission vehicles
+            elif row.get('measure_labels') == 'I_RE':
+                asi_category = 'Improve'  # Renewable energy reduces carbon intensity
+            elif row.get('measure_labels') == 'I_Freighteff':
+                asi_category = 'Improve'  # Freight efficiency improvements
+            elif row.get('measure_labels') == 'I_Load':
+                asi_category = 'Improve'  # Load efficiency improvements
+            elif row.get('measure_labels') == 'I_Ecodriving':
+                asi_category = 'Improve'  # Ecodriving improves fuel efficiency
+            elif row.get('measure_labels') == 'I_Aircraftfleet':
+                asi_category = 'Improve'  # Aircraft fleet renovation for efficiency
+            elif row.get('measure_labels') == 'I_Airtraffic':
+                asi_category = 'Improve'  # Air traffic management for efficiency
+            elif row.get('measure_labels') == 'I_Aviation':
+                asi_category = 'Improve'  # Aviation efficiency improvements
+            elif row.get('measure_labels') == 'I_CO2certificate':
+                asi_category = 'Improve'  # Airport efficiency certification
+            elif row.get('measure_labels') == 'I_Jetfuel':
+                asi_category = 'Improve'  # Lower carbon aviation fuels
+            elif row.get('measure_labels') == 'I_Onshorepower':
+                asi_category = 'Improve'  # Clean energy for ships
+            elif row.get('measure_labels') == 'I_PortInfra':
+                asi_category = 'Improve'  # Port efficiency improvements
+            elif row.get('measure_labels') == 'I_Shipefficiency':
+                asi_category = 'Improve'  # Ship efficiency improvements
+            elif row.get('measure_labels') == 'I_Shipping':
+                asi_category = 'Improve'  # Shipping efficiency improvements
+            
+            # COMPREHENSIVE PLANNING - can have multiple ASI effects
+            elif row.get('measure_labels') == 'A_Complan':
+                asi_category = 'Avoid, shift, improve'  # Comprehensive transport planning
+            elif row.get('measure_labels') == 'A_Natmobplan':
+                asi_category = 'Avoid, shift, improve'  # National mobility plans are comprehensive
+            elif row.get('measure_labels') == 'A_SUMP':
+                asi_category = 'Avoid, shift, improve'  # SUMPs are explicitly comprehensive
+            
+            else:
+                asi_category = 'No concrete ASI category'
+
+        return asi_category
+    except Exception as e:
+        print(f"Error in asi_mapping: {e}")
+        return '--'
 
 def parameter_type_mapping(row):
     """

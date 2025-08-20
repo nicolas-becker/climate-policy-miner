@@ -89,8 +89,8 @@ processing_tasks = {}
 os.environ["LANGCHAIN_TRACING_V2"] = "false" # deactivate tracing for now, as api key is required to be updated to v2: "error":"Unauthorized: Using outdated v1 api key. Please use v2 api key."
 
 # Load environment variables from .env file - for local development
-#env_path = Path(__file__).resolve().parent.parent / '.env'
-#load_dotenv(dotenv_path=env_path)
+env_path = Path(__file__).resolve().parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 # Azure OpenAI Setup 
 LLM = AzureChatOpenAI(
@@ -735,7 +735,7 @@ def postprocess_results(file_directory, output_df, filename):
 
     #  targets
     targets_output_df = output_df[output_df['target']=='True']
-    targets_output_df=targets_output_df[['quote', 'page', 'target_labels', 'target_area', 'ghg_target', 'conditionality']]
+    targets_output_df = targets_output_df[['quote', 'page', 'target_labels', 'target_area', 'ghg_target', 'conditionality']]
     targets_output_df = targets_output_df.rename(columns={
         'quote': 'Content',
         'page': 'Page Number',
@@ -750,11 +750,27 @@ def postprocess_results(file_directory, output_df, filename):
 
     #  mitigation
     mitigation_output_df = output_df[output_df['mitigation_measure']=='True']
-    mitigation_output_df = mitigation_output_df[['quote', 'page', 'measure_labels']]
+    mitigation_output_df = mitigation_output_df[['quote', 'page', 'measure_labels', 'category', 'purpose', 'instrument', 'asi']]
+    mitigation_output_df = mitigation_output_df.rename(columns={
+        'quote': 'Quote',
+        'page': 'Page Number',
+        'category': 'Category',
+        'purpose': 'Purpose',
+        'instrument': 'Instrument',
+        'asi': 'A-S-I'
+    })
+    mitigation_output_df = mitigation_output_df[["Category", "Purpose", "Instrument", "Quote", "A-S-I", "Page Number"]]
     
     #  adaptation
     adaptation_output_df = output_df[output_df['adaptation_measure']=='True']
-    adaptation_output_df = adaptation_output_df[['quote', 'page', 'measure_labels']]
+    adaptation_output_df = adaptation_output_df[['quote', 'page', 'measure_labels', 'category', 'instrument']]
+    adaptation_output_df = adaptation_output_df.rename(columns={
+        'quote': 'Quote',
+        'page': 'Page Number',
+        'category': 'Category',
+        'instrument': 'Measure'
+    })
+    adaptation_output_df = adaptation_output_df[["Category", "Measure", "Quote", "Page Number"]]
 
     #  save to single Excel file
     #  create an Excel writer object

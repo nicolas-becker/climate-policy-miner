@@ -92,13 +92,13 @@
                 <h1 class="card-title text-center mb-4">🚍🌍 Transport Policy Miner 📃⛏️</h1>
                 
                 <div class="alert alert-info" role="alert">
-                    <h4>📄 Document Analysis in Progress</h4>
-                    <p class="mb-2">Document: <strong>{{ original_filename or 'Loading...' }}</strong></p>
-                    <p class="mb-2">Task ID: <code>{{ task_id }} (for debugging purposes)</code></p>
+                    <h4><strong>Analysis in Progress</strong></h4>
+                    <p class="mb-2">📝 Document: <strong>{{ original_filename or 'Loading...' }}</strong></p>
+                    <p class="mb-2">📌 Task ID: <code>{{ task_id }} (for debugging purposes)</code></p>
                     <!-- Pre-calculated document information -->
                     {% if document_pages != "unknown" and estimated_minutes != "unknown" %}
                         <div class="alert alert-secondary mt-3">
-                            <h5>📊 Your document is being analyzed:</h5>
+                            <h5>✨ Your document is being analyzed:</h5>
                             <p class="mb-1">📄 <strong>{{ document_pages }} pages</strong> detected</p>
                             <p class="mb-1">⏱️ <strong>{{ estimated_minutes }} minute{{ 's' if estimated_minutes > 1 else '' }}</strong> estimated</p>
                             {% if encouragement %}
