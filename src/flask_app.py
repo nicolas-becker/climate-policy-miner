@@ -169,8 +169,8 @@ def download_pdf_from_url(url, save_dir):
         if not filename:
             filename = 'downloaded_document.pdf'
 
-        # Limit filename length to 60 characters (including extension)
-        MAX_FILENAME_LENGTH = 60
+        # Limit filename length to 90 characters (including extension)
+        MAX_FILENAME_LENGTH = 90
         name, ext = os.path.splitext(filename)
         ext = ext if ext else '.pdf'
         # Remove unnecessary characters (spaces, underscores, dashes, etc.) if too long

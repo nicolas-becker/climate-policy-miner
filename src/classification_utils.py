@@ -128,7 +128,7 @@ class TargetObject(BaseModel):
     energy: str = Field(description="Does the text refer to the ENERGY sector?", enum=["True", "False"])
     transport: str = Field(description="Does the text refer to the TRANSPORT sector or a TRANSPORT-RELATED subsector?", enum=["True", "False"])
     #economy_wide: str = Field(description="A reduction target for greenhouse gas emissions (covering CO2 and other relevant greenhouse gases) has been set for the whole economy or collectively for all sectors covered. Does not deal with a specific sector, but with the economy in general.", enum=["True", "False"]) # not performing well, after first evaluation and comparison to single prompt
-    economy_wide: str = Field(description="Does the text not refer to a specific sector, but to the ECONOMY in general?", enum=["True", "False"]) # revisited after comparison with single-prompt results --> not yet evaluated
+    economy_wide: str = Field(description="Does the text not refer to a sector in specific, but to the economy in GENERAL? This applies every time a text does not mention a specific sector, such as transport or energy.", enum=["True", "False"]) # revisited after comparison with single-prompt results. Revisited again, after noticing that focus on ECONOMY makes it harder for model to detect cases, where no sector is specified --> not yet evaluated
     # mitigation / adaptation
     mitigation: str = Field(description="Does the text concern climate change MITIGATION in a direct or indirect manner?", enum=["True", "False"])
     adaptation: str = Field(description="Does the text concern climate change ADAPTATION or building resilience against consequencs of climate change?", enum=["True", "False"])
@@ -1497,22 +1497,24 @@ def target_area_mapping(row):
         economy_wide = safe_bool_check(row.get('economy_wide', False))
         net_zero = safe_bool_check(row.get('net_zero', False))
         mitigation = safe_bool_check(row.get('mitigation', False))
-        ghg = safe_bool_check(row.get('ghg', False))
+        ghg = safe_bool_check(row.get('ghg', False)) # already covered by GHG mapping
         transport = safe_bool_check(row.get('transport', False))
         adaptation = safe_bool_check(row.get('adaptation', False))
         energy = safe_bool_check(row.get('energy', False))
         
         if economy_wide and net_zero:
             target_area = 'Net zero target'
-        elif economy_wide and mitigation and ghg:
+        elif economy_wide and mitigation:
             target_area = 'Overall mitigation target'
-        elif transport and mitigation and ghg:
+        elif transport and mitigation:
             target_area = 'Transport sector mitigation target'
         elif transport and adaptation:
             target_area = 'Transport sector adaptation target'
         elif energy and mitigation:
             target_area = 'Energy sector target'
-            
+        elif mitigation:
+            target_area = 'Overall mitigation target'
+
         return target_area
     except Exception as e:
         print(f"Error in target_area_mapping: {e}")
