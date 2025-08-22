@@ -34,6 +34,25 @@
   <div class="container py-5">
     <h1 class="mb-2 text-center">🔍 Extracted Content & Quotes</h1>
     <p class="document-name text-center">Document: <strong>{{ original_filename }}</strong></p>
+    
+    {% if total_runtime and total_tokens %}
+    <div class="text-center mb-4">
+      <div class="card mx-auto" style="max-width: 500px;">
+        <div class="card-body py-2">
+          <div class="row">
+            <div class="col-6">
+              <small class="text-muted">Processing Time:</small><br>
+              <strong class="text-primary">{{ total_runtime }}</strong>
+            </div>
+            <div class="col-6">
+              <small class="text-muted">AI Tokens Used:</small><br>
+              <strong class="text-success">{{ "{:,}".format(total_tokens) }}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
 
     {% if citations %}
       <!-- Main Citations Accordion -->

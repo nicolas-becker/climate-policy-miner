@@ -18,6 +18,7 @@ import tempfile
 import json
 import pandas as pd
 import uuid
+import queue
 import threading
 import logging
 import time
@@ -120,6 +121,48 @@ TAXONOMY = ["Transport",
             "Target",
             "Measure"
             ]
+
+# Queue management
+processing_queue = queue.Queue(maxsize=5)  # Max 5 users in queue
+current_processing = {"task_id": None, "status": "idle"}
+
+def queue_processor():
+    """Process documents one at a time with task-specific outputs"""
+    while True:
+        task = None
+        try:
+            task = processing_queue.get()
+            if task is None:
+                break
+                
+            current_processing["task_id"] = task["task_id"]
+            current_processing["status"] = "processing"
+            
+            # Process with task-specific outputs
+            process_document(
+                task["task_id"], 
+                task["file_path"], 
+                task["query_terms"], 
+                task["filename"],
+                task.get("document_pages"),
+                task.get("estimated_minutes")
+            )
+            
+        except queue.Empty:
+            continue
+        except Exception as e:
+            logging.error(f"Queue processor error: {e}")
+            if task:
+                processing_tasks[task["task_id"]]["status"] = "error"
+        finally:
+            current_processing["task_id"] = None
+            current_processing["status"] = "idle"
+            if task:
+                processing_queue.task_done()
+
+# Start queue processor
+queue_thread = threading.Thread(target=queue_processor, daemon=True)
+queue_thread.start()
 
 def download_pdf_from_url(url, save_dir):
     """
@@ -658,6 +701,7 @@ def highlight_terms_in_pdf(pdf_path, query_terms):
     doc.save(highlighted_path)
     return highlighted_path
 
+# DEPRECATED: This function is not used in the current pipeline.
 def extract_text_and_highlight(pdf_path, query_terms):
     """
     TODO: Highlighting missing
@@ -1093,6 +1137,8 @@ def process_document(task_id, file_path, query_terms, filename, document_pages=N
         # Store results for retrieval
         processing_tasks[task_id]["status"] = "Analysis complete"
         processing_tasks[task_id]["result"] = citations
+        processing_tasks[task_id]["total_runtime_seconds"] = total_elapsed_time  
+        processing_tasks[task_id]["total_tokens_used"] = total_tokens_used    
         
     except Exception as e:
         # Capture the full traceback
@@ -1139,6 +1185,14 @@ def index():
         filename = None
         
         try:
+            # Check if queue is full
+            if processing_queue.full():
+                return render_template('index.html', 
+                                     error="Server is busy processing other documents. Please try again in a few minutes.")
+            
+            # Generate unique task ID
+            task_id = str(uuid.uuid4())
+
             # Create directories
             by_products_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'by-products')
             os.makedirs(by_products_folder, exist_ok=True) # Ensure the subfolder exists
@@ -1148,6 +1202,9 @@ def index():
                 file = request.files.get('pdf_file')
                 if not file or file.filename == '':
                     return render_template('index.html', error="Please select a PDF file to upload.")
+                
+                if not file.filename.lower().endswith('.pdf'):
+                    return render_template('index.html', error="Please upload a valid PDF file.")
                 
                 filename = secure_filename(file.filename)
                 file_path = os.path.join(by_products_folder, filename)
@@ -1173,7 +1230,7 @@ def index():
                     return render_template('index.html', error="An unexpected error occurred while downloading the PDF.")
             
             else:
-                return render_template('index.html', error="Invalid input method selected.")
+                return render_template('index.html', error="Please select an input method.")
             
             # Verify we have a valid file
             if not file_path or not os.path.exists(file_path):
@@ -1189,52 +1246,87 @@ def index():
                 document_pages = len(doc)
                 doc.close()
 
-                # Calculate estimated time using calculated regression: time = 0.2455 * pages (rounded to full minutes)
-                estimated_minutes = max(1, round(0.2455 * document_pages))  # At least 1 minute
+                # Calculate estimated time using calculated regression: time = 0.123 * pages (rounded to full minutes)
+                estimated_minutes = max(1, round(0.123 * document_pages))  # At least 1 minute
                 
                 # Create user-friendly message
-                if document_pages <= 20:
+                if estimated_minutes <= 5:
                     time_message = f"Should complete in about {estimated_minutes} minute{'s' if estimated_minutes > 1 else ''}"
                     encouragement = ""
-                elif document_pages <= 50:
+                elif estimated_minutes <= 15:
                     time_message = f"Estimated processing time: {estimated_minutes} minutes"
-                    encouragement = "This is a medium-sized document."
-                elif document_pages <= 100:
+                    encouragement = "☕ Perfect time for a quick coffee break!"
+                elif estimated_minutes <= 30:
                     time_message = f"Estimated processing time: {estimated_minutes} minutes"
-                    encouragement = "This is a larger document that will take some time."
+                    encouragement = "📚 Great time to catch up on some reading!"
+                elif estimated_minutes <= 60:
+                    time_message = f"Estimated processing time: {estimated_minutes} minutes"
+                    encouragement = "🍽️ Perfect timing for lunch!"
                 else:
                     time_message = f"Estimated processing time: {estimated_minutes} minutes"
-                    encouragement = "This is a large document. Grab yourself some coffee, this might take a few minutes. ☕"
-                
+                    encouragement = "🎬 That's a long document. Time to watch a movie while we work!"
+
                 logging.info(f"Document analysis: {filename} has {document_pages} pages, estimated time: {estimated_minutes} minutes")
                 
             except Exception as page_detection_error:
                 logging.warning(f"Could not detect document length for {filename}: {page_detection_error}")
                 time_message = "Processing time will vary based on document size"
                 encouragement = ""
-
-            # Generate a unique task ID
-            task_id = str(uuid.uuid4())
             
-            # Start processing in a background thread
-            thread = threading.Thread(target=process_document, 
-                                    args=(task_id, file_path, query_terms, filename, document_pages, estimated_minutes))
-            thread.daemon = False
-            thread.start()
+            # Initialize task tracking
+            processing_tasks[task_id] = {
+                'status': 'queued',
+                'progress': 0,
+                'start_time': time.time(),
+                'filename': filename,
+                'queue_position': processing_queue.qsize() + 1
+            }
             
-            # Redirect to progress page
+            # Add task to queue
+            processing_queue.put({
+                "task_id": task_id,
+                "file_path": file_path,
+                "query_terms": query_terms,
+                "filename": filename,
+                "document_pages": document_pages,
+                "estimated_minutes": estimated_minutes
+            })
+            
+            # Calculate queue position and estimated wait time
+            queue_position = processing_queue.qsize()
+            
+            # Rough estimate of wait time based on queue position
+            if queue_position == 1:
+                queue_message = "Your document is next in line!"
+                total_wait_minutes = estimated_minutes
+            else:
+                # Assume average 20 minutes per document ahead
+                queue_wait_minutes = (queue_position - 1) * 20
+                total_wait_minutes = queue_wait_minutes + estimated_minutes
+                queue_message = f"You are #{queue_position} in the queue. Estimated wait: {queue_wait_minutes} minutes before processing starts."
+            
             return render_template('progress.html', 
-                                 task_id=task_id, 
+                                 task_id=task_id,
+                                 queue_position=queue_position,
+                                 queue_message=queue_message,
                                  original_filename=filename,
                                  document_pages=document_pages,
                                  estimated_minutes=estimated_minutes,
+                                 total_wait_minutes=total_wait_minutes,
                                  time_message=time_message,
                                  encouragement=encouragement)
             
         except Exception as e:
             logging.error(f"Error in index route: {e}")
+            # Clean up uploaded file if there was an error
+            if 'file_path' in locals() and os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except:
+                    pass
             return render_template('index.html', error=f"An error occurred: {str(e)}")
-            
+    
+    # GET request - show the upload form
     return render_template('index.html')
 
 @app.route('/results/<task_id>')
@@ -1246,12 +1338,28 @@ def results(task_id):
         task = processing_tasks[task_id]
         citations = task.get("result", [])
         original_filename = task.get("original_filename", "analysis")
+        
+        # Get runtime and token stats
+        total_runtime_seconds = task.get("total_runtime_seconds", 0)
+        total_tokens_used = task.get("total_tokens_used", 0)
+        
+        # Format runtime for display
+        if total_runtime_seconds > 3600:  # More than 1 hour
+            runtime_display = f"{total_runtime_seconds/3600:.1f} hours"
+        elif total_runtime_seconds > 60:  # More than 1 minute
+            runtime_display = f"{total_runtime_seconds/60:.1f} minutes"
+        else:
+            runtime_display = f"{total_runtime_seconds:.1f} seconds"
+
         return render_template(
             'results.html',
             citations=citations,
             results_folder='results',
             task_id=task_id,
-            original_filename=original_filename
+            original_filename=original_filename,
+            total_runtime=runtime_display,           
+            total_tokens=total_tokens_used,          
+            runtime_seconds=total_runtime_seconds    
         )
     else:
         # If task doesn't exist or isn't complete, redirect to progress
@@ -1272,6 +1380,23 @@ def heartbeat():
         "active_tasks": len(processing_tasks),
         "memory_mb": psutil.Process().memory_info().rss / 1024 / 1024
     })
+
+@app.route('/api/status/<task_id>')
+def task_status(task_id):
+    """Enhanced status with queue position"""
+    task = processing_tasks.get(task_id, {})
+    
+    # Calculate queue position if still queued
+    if task.get('status') == 'queued':
+        queue_position = 1
+        # Count tasks ahead in queue (simplified)
+        for queued_task_id, queued_task in processing_tasks.items():
+            if (queued_task.get('status') == 'queued' and 
+                queued_task.get('start_time', 0) < task.get('start_time', 0)):
+                queue_position += 1
+        task['queue_position'] = queue_position
+    
+    return jsonify(task)
 
 @app.route('/api/detailed_status/<task_id>')
 def detailed_task_status(task_id):
