@@ -176,6 +176,30 @@
         let consecutiveFailures = 0;
         let lastSuccessfulUpdate = Date.now();
         let isShowingError = false;
+        let heartbeatInterval;
+
+        function startHeartbeat(taskId) {
+            heartbeatInterval = setInterval(() => {
+                fetch(`/api/heartbeat/${taskId}`, {method: 'POST'})
+                    .catch(err => {
+                        console.log('Heartbeat failed:', err);
+                        clearInterval(heartbeatInterval);
+                    });
+            }, 30000); // Every 30 seconds
+        }
+
+        // Release queue on page unload (browser close)
+        window.addEventListener('beforeunload', function() {
+            if (typeof taskId !== 'undefined') {
+                // Use sendBeacon for reliable delivery on page unload
+                navigator.sendBeacon(`/api/release-slot/${taskId}`, '');
+            }
+        });
+
+        // Start heartbeat for current task
+        if (typeof taskId !== 'undefined') {
+            startHeartbeat(taskId);
+        }
 
         function showProgressDisplay() {
             const progressContainer = document.querySelector('.progress-container');

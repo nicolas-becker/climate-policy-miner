@@ -127,11 +127,11 @@ processing_queue = queue.Queue(maxsize=5)  # Max 5 users in queue
 current_processing = {"task_id": None, "status": "idle"}
 
 def queue_processor():
-    """Process documents one at a time with task-specific outputs"""
+    """Process documents one at a time with task-specific outputs. Keep queue slot until user is done"""
     while True:
         task = None
         try:
-            task = processing_queue.get()
+            task = processing_queue.get(timeout=60)
             if task is None:
                 break
                 
@@ -154,11 +154,26 @@ def queue_processor():
             logging.error(f"Queue processor error: {e}")
             if task:
                 processing_tasks[task["task_id"]]["status"] = "error"
+                processing_queue.task_done()
         finally:
             current_processing["task_id"] = None
             current_processing["status"] = "idle"
-            if task:
+
+def release_queue_slot(task_id):
+    """Release queue slot for a specific task"""
+    try:
+        if task_id in processing_tasks:
+            task = processing_tasks[task_id]
+            if task.get("progress", 0) >= 100 or task.get("error"):
                 processing_queue.task_done()
+                logging.info(f"Queue slot released for task {task_id}")
+                
+                # Clean up task data after some time
+                del processing_tasks[task_id]
+                return True
+    except Exception as e:
+        logging.error(f"Error releasing queue slot: {e}")
+    return False
 
 # Start queue processor
 queue_thread = threading.Thread(target=queue_processor, daemon=True)
@@ -1165,6 +1180,12 @@ def health_check():
         "service": "climate-policy-miner"
     }), 200
 
+@app.route('/api/release-slot/<task_id>', methods=['POST'])
+def api_release_slot(task_id):
+    """API endpoint to release queue slot"""
+    success = release_queue_slot(task_id)
+    return jsonify({"released": success})
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     """
@@ -1508,6 +1529,10 @@ def download_results():
         base_filename = os.path.splitext(original_filename)[0]
         download_name = f'{base_filename}_analysis.zip'
         
+        
+        # ✅ Free the queue slot after successful download preparation
+        release_queue_slot(task_id)
+
         return send_file(
             memory_file,
             download_name=download_name,
@@ -1521,6 +1546,39 @@ def download_results():
         logging.error(f"Unexpected error during download: {e}")
         return "Internal Server Error", 500
 
+@app.route('/api/heartbeat/<task_id>', methods=['POST'])
+def task_heartbeat(task_id):
+    """Update task heartbeat timestamp"""
+    if task_id in processing_tasks:
+        processing_tasks[task_id]["last_heartbeat"] = time.time()
+        return jsonify({"status": "updated"})
+    return jsonify({"status": "not_found"}), 404
+
+# Background cleanup for abandoned tasks
+def cleanup_abandoned_tasks():
+    """Clean up tasks with no heartbeat for 10 minutes"""
+    while True:
+        try:
+            current_time = time.time()
+            abandoned_tasks = []
+            
+            for task_id, task in processing_tasks.items():
+                last_heartbeat = task.get("last_heartbeat", 0)
+                if current_time - last_heartbeat > 600:  # 10 minutes
+                    abandoned_tasks.append(task_id)
+            
+            for task_id in abandoned_tasks:
+                logging.info(f"Cleaning up abandoned task: {task_id}")
+                release_queue_slot(task_id)
+                
+        except Exception as e:
+            logging.error(f"Cleanup error: {e}")
+        
+        time.sleep(300)  # Check every 5 minutes
+
+# Start cleanup thread
+cleanup_thread = threading.Thread(target=cleanup_abandoned_tasks, daemon=True)
+cleanup_thread.start()
 
 @app.route('/download-partial')
 def download_partial_results():
@@ -1626,7 +1684,19 @@ def debug_task(task_id):
         })
     else:
         return jsonify({'task_exists': False, 'task_id': task_id})
-    
+
+@app.route('/api/debug/queue')
+def debug_queue():
+    """Debug endpoint to check queue status"""
+    return jsonify({
+        "queue_size": processing_queue.qsize(),
+        "queue_maxsize": processing_queue.maxsize,
+        "current_processing": current_processing,
+        "queue_thread_alive": queue_thread.is_alive(),
+        "active_threads": threading.active_count(),
+        "thread_names": [t.name for t in threading.enumerate()]
+    })
+
 if __name__ == '__main__':
     # For Render.com, use the PORT environment variable
     port = int(os.environ.get('PORT', 10000))

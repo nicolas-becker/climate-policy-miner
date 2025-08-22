@@ -110,11 +110,43 @@
     {% endif %}
 
     <div class="mt-4 d-flex justify-content-between">
-      <a href="{{ url_for('index') }}" class="btn btn-secondary">🔄 Analyze Another Document</a>
+      <a href="{{ url_for('index') }}" onclick="releaseQueueSlot('{{ task_id }}')" class="btn btn-secondary">🔄 Analyze Another Document</a>
       <a href="{{ url_for('download_results', task_id=task_id, filename=original_filename) }}" class="btn btn-primary">📥 Download Results</a>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <script>
+  const taskId = '{{ task_id }}';
+  let heartbeatInterval;
+
+  function startHeartbeat(taskId) {
+      heartbeatInterval = setInterval(() => {
+          fetch(`/api/heartbeat/${taskId}`, {method: 'POST'})
+              .catch(err => {
+                  console.log('Heartbeat failed:', err);
+                  clearInterval(heartbeatInterval);
+              });
+      }, 30000); // Every 30 seconds
+  }
+
+  // Release queue on page unload (browser close)
+  window.addEventListener('beforeunload', function() {
+      if (taskId) { 
+          navigator.sendBeacon(`/api/release-slot/${taskId}`, '');
+      }
+  });
+
+  // Start heartbeat for current task
+  startHeartbeat(taskId);
+  
+  function releaseQueueSlot(taskId) {
+      // Release queue slot when user starts new analysis
+      fetch(`/api/release-slot/${taskId}`, {method: 'POST'})
+          .catch(err => console.log('Queue release error:', err));
+  }
+</script>
+
 </body>
 </html>
