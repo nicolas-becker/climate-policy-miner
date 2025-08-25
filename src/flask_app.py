@@ -128,9 +128,9 @@ current_processing = {"task_id": None, "status": "idle"}
 
 def queue_processor():
     """Process documents one at a time. Keep queue slot until user is done"""
-    
+    thread_name = threading.current_thread().name
     logging.info(f"Queue processor thread '{thread_name}' started successfully")
-    
+
     while True:
         task = None
         try:
