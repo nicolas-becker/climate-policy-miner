@@ -127,14 +127,20 @@ processing_queue = queue.Queue(maxsize=5)  # Max 5 users in queue
 current_processing = {"task_id": None, "status": "idle"}
 
 def queue_processor():
-    """Process documents one at a time with task-specific outputs. Keep queue slot until user is done"""
+    """Process documents one at a time. Keep queue slot until user is done"""
+    
+    logging.info(f"Queue processor thread '{thread_name}' started successfully")
+    
     while True:
         task = None
         try:
             task = processing_queue.get(timeout=60)
             if task is None:
+                logging.info(f"Queue processor received stop signal")
                 break
-                
+            
+            logging.info(f"Processing task: {task['task_id']} (Queue size: {processing_queue.qsize()})")
+
             current_processing["task_id"] = task["task_id"]
             current_processing["status"] = "processing"
             
@@ -148,16 +154,21 @@ def queue_processor():
                 task.get("estimated_minutes")
             )
             
+            logging.info(f"Completed task: {task['task_id']}")
+
         except queue.Empty:
             continue
         except Exception as e:
             logging.error(f"Queue processor error: {e}")
             if task:
                 processing_tasks[task["task_id"]]["status"] = "error"
+                processing_tasks[task["task_id"]]["error"] = str(e)
                 processing_queue.task_done()
         finally:
             current_processing["task_id"] = None
             current_processing["status"] = "idle"
+            
+    logging.warning(f"Queue processor thread '{thread_name}' has ended")
 
 def release_queue_slot(task_id):
     """Release queue slot for a specific task"""
@@ -176,8 +187,43 @@ def release_queue_slot(task_id):
     return False
 
 # Start queue processor
-queue_thread = threading.Thread(target=queue_processor, daemon=True)
-queue_thread.start()
+def start_queue_processor_safely():
+    """Start queue processor with error handling and restart capability"""
+    global queue_thread
+    
+    try:
+        logging.info("Starting queue processor thread")
+        
+        # Check if thread is already running
+        if 'queue_thread' in globals() and queue_thread.is_alive():
+            logging.info("Queue processor already running")
+            return True
+        
+        # Start new thread
+        queue_thread = threading.Thread(target=queue_processor, daemon=True, name="QueueProcessor")
+        queue_thread.start()
+        
+        # Verify it started
+        time.sleep(0.1)  # Give it a moment to start
+        if queue_thread.is_alive():
+            logging.info("Queue processor thread started successfully")
+            return True
+        else:
+            logging.error("Queue processor thread failed to start")
+            return False
+            
+    except Exception as e:
+        logging.error(f"Error starting queue processor: {e}")
+        return False
+
+# Replace the simple thread start with the safe version:
+# OLD: 
+# queue_thread = threading.Thread(target=queue_processor, daemon=True)
+# queue_thread.start()
+
+# NEW:
+if not start_queue_processor_safely():
+    logging.critical("Failed to start queue processor on app startup!")
 
 def download_pdf_from_url(url, save_dir):
     """
@@ -1696,6 +1742,34 @@ def debug_queue():
         "active_threads": threading.active_count(),
         "thread_names": [t.name for t in threading.enumerate()]
     })
+
+@app.route('/api/debug/restart-queue', methods=['POST'])
+def restart_queue_processor():
+    """Manual restart of queue processor for debugging"""
+    try:
+        global queue_thread
+        
+        # Check current status
+        was_alive = False
+        if 'queue_thread' in globals():
+            was_alive = queue_thread.is_alive()
+        
+        # Attempt restart
+        success = start_queue_processor_safely()
+        
+        return jsonify({
+            "restarted": success,
+            "was_alive_before": was_alive,
+            "is_alive_now": queue_thread.is_alive() if 'queue_thread' in globals() else False,
+            "queue_size": processing_queue.qsize(),
+            "message": "Queue processor restarted successfully" if success else "Failed to restart queue processor"
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "restarted": False
+        }), 500
 
 if __name__ == '__main__':
     # For Render.com, use the PORT environment variable
