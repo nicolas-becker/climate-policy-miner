@@ -225,8 +225,8 @@ def start_queue_processor_safely():
 # queue_thread.start()
 
 # NEW:
-if not start_queue_processor_safely():
-    logging.critical("Failed to start queue processor on app startup!")
+#if not start_queue_processor_safely():
+#    logging.critical("Failed to start queue processor on app startup!")
 
 def download_pdf_from_url(url, save_dir):
     """
@@ -1792,7 +1792,39 @@ def debug_logs_file():
     except Exception as e:
         return jsonify({"error": str(e)})
 
+def initialize_queue_system():
+    """Initialize queue system after app is fully configured"""
+    try:
+        logging.info("=== INITIALIZING QUEUE SYSTEM ===")
+        
+        # Test logging first
+        logging.info("Testing logging system...")
+        
+        # Test global variables access
+        logging.info(f"LLM available: {LLM is not None}")
+        logging.info(f"EMBEDDING available: {EMBEDDING is not None}")
+        logging.info(f"processing_queue available: {processing_queue is not None}")
+        
+        # Start queue processor
+        success = start_queue_processor_safely()
+        
+        if success:
+            logging.info("=== QUEUE SYSTEM INITIALIZED SUCCESSFULLY ===")
+        else:
+            logging.critical("=== QUEUE SYSTEM FAILED TO INITIALIZE ===")
+            
+        return success
+        
+    except Exception as e:
+        logging.critical(f"=== QUEUE INITIALIZATION ERROR: {e} ===")
+        logging.critical(f"=== QUEUE INIT TRACEBACK: {traceback.format_exc()} ===")
+        return False
+
 if __name__ == '__main__':
+    # Initialize queue system after everything is loaded
+    if not initialize_queue_system():
+        logging.critical("❌ CRITICAL: Queue system failed to start!")
+
     # For Render.com, use the PORT environment variable
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port, debug=False)  # Set debug=True for development
