@@ -75,6 +75,9 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
+logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+logging.info("============ App started ============")
+
 # Log the start of the application
 logging.info("============" \
              "App started." \
@@ -1770,6 +1773,24 @@ def restart_queue_processor():
             "error": str(e),
             "restarted": False
         }), 500
+
+@app.route('/api/debug/logs-file')
+def debug_logs_file():
+    """Read the last 50 lines of the log file directly"""
+    try:
+        log_file = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'logs', 'app.log')
+        if os.path.exists(log_file):
+            with open(log_file, 'r') as f:
+                lines = f.readlines()
+                return jsonify({
+                    "last_50_lines": lines[-50:],  # Last 50 lines
+                    "total_lines": len(lines),
+                    "file_size_kb": os.path.getsize(log_file) / 1024
+                })
+        else:
+            return jsonify({"error": "Log file not found"})
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 if __name__ == '__main__':
     # For Render.com, use the PORT environment variable
