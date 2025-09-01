@@ -78,11 +78,6 @@ logging.basicConfig(
 logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 logging.info("============ App started ============")
 
-# Log the start of the application
-logging.info("============" \
-             "App started." \
-             "============")
-
 # Store for tracking processing tasks
 processing_tasks = {}
 
@@ -93,8 +88,8 @@ processing_tasks = {}
 os.environ["LANGCHAIN_TRACING_V2"] = "false" # deactivate tracing for now, as api key is required to be updated to v2: "error":"Unauthorized: Using outdated v1 api key. Please use v2 api key."
 
 # Load environment variables from .env file - for local development
-#env_path = Path(__file__).resolve().parent.parent / '.env'
-#load_dotenv(dotenv_path=env_path)
+env_path = Path(__file__).resolve().parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
 
 # Azure OpenAI Setup 
 LLM = AzureChatOpenAI(
@@ -125,6 +120,7 @@ TAXONOMY = ["Transport",
             "Measure"
             ]
 
+'''Queue
 # Queue management
 processing_queue = queue.Queue(maxsize=5)  # Max 5 users in queue
 current_processing = {"task_id": None, "status": "idle"}
@@ -227,6 +223,7 @@ def start_queue_processor_safely():
 # NEW:
 #if not start_queue_processor_safely():
 #    logging.critical("Failed to start queue processor on app startup!")
+'''
 
 def download_pdf_from_url(url, save_dir):
     """
@@ -1229,11 +1226,13 @@ def health_check():
         "service": "climate-policy-miner"
     }), 200
 
+'''Queue
 @app.route('/api/release-slot/<task_id>', methods=['POST'])
 def api_release_slot(task_id):
     """API endpoint to release queue slot"""
     success = release_queue_slot(task_id)
     return jsonify({"released": success})
+'''
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -1255,11 +1254,12 @@ def index():
         filename = None
         
         try:
+            '''Queue
             # Check if queue is full
             if processing_queue.full():
                 return render_template('index.html', 
                                      error="Server is busy processing other documents. Please try again in a few minutes.")
-            
+            '''
             # Generate unique task ID
             task_id = str(uuid.uuid4())
 
@@ -1342,16 +1342,24 @@ def index():
                 logging.warning(f"Could not detect document length for {filename}: {page_detection_error}")
                 time_message = "Processing time will vary based on document size"
                 encouragement = ""
-            
+
+            processing_thread = threading.Thread(
+                target=process_document,
+                args=(task_id, file_path, query_terms, filename, document_pages, estimated_minutes),
+                daemon=False
+            )
+            processing_thread.start()
+
+            '''Queue
             # Initialize task tracking
             processing_tasks[task_id] = {
                 'status': 'queued',
                 'progress': 0,
                 'start_time': time.time(),
                 'filename': filename,
-                'queue_position': processing_queue.qsize() + 1
+                #'queue_position': processing_queue.qsize() + 1 #Queue
             }
-            
+
             # Add task to queue
             processing_queue.put({
                 "task_id": task_id,
@@ -1374,15 +1382,16 @@ def index():
                 queue_wait_minutes = (queue_position - 1) * 20
                 total_wait_minutes = queue_wait_minutes + estimated_minutes
                 queue_message = f"You are #{queue_position} in the queue. Estimated wait: {queue_wait_minutes} minutes before processing starts."
+            '''
             
             return render_template('progress.html', 
                                  task_id=task_id,
-                                 queue_position=queue_position,
-                                 queue_message=queue_message,
+                                 #queue_position=queue_position,    #Queue
+                                 #queue_message=queue_message,      #Queue
                                  original_filename=filename,
                                  document_pages=document_pages,
                                  estimated_minutes=estimated_minutes,
-                                 total_wait_minutes=total_wait_minutes,
+                                 #total_wait_minutes=total_wait_minutes,    #Queue
                                  time_message=time_message,
                                  encouragement=encouragement)
             
@@ -1404,8 +1413,9 @@ def results(task_id):
     """
     Display results when processing is complete
     """
-    if task_id in processing_tasks and processing_tasks[task_id]["result"] is not None:
-        task = processing_tasks[task_id]
+    task = processing_tasks.get(task_id)
+
+    if task and task.get("result") is not None:
         citations = task.get("result", [])
         original_filename = task.get("original_filename", "analysis")
         
@@ -1435,9 +1445,9 @@ def results(task_id):
         # If task doesn't exist or isn't complete, redirect to progress
         return render_template('progress.html', 
                              task_id=task_id,
-                             original_filename=task.get("original_filename", "Unknown"),
-                             document_pages=task.get("document_pages", "unknown"),
-                             estimated_minutes=task.get("estimated_time_minutes", "unknown"),
+                             original_filename=task.get("original_filename", "Unknown") if task else "Unknown",
+                             document_pages=task.get("document_pages", "unknown") if task else "Unknown",
+                             estimated_minutes=task.get("estimated_time_minutes", "unknown") if task else "Unknown",
                              time_message="",
                              encouragement="")
 
@@ -1580,7 +1590,7 @@ def download_results():
         
         
         # ✅ Free the queue slot after successful download preparation
-        release_queue_slot(task_id)
+        #release_queue_slot(task_id)    #Queue
 
         return send_file(
             memory_file,
@@ -1603,6 +1613,7 @@ def task_heartbeat(task_id):
         return jsonify({"status": "updated"})
     return jsonify({"status": "not_found"}), 404
 
+'''Queue
 # Background cleanup for abandoned tasks
 def cleanup_abandoned_tasks():
     """Clean up tasks with no heartbeat for 10 minutes"""
@@ -1628,6 +1639,7 @@ def cleanup_abandoned_tasks():
 # Start cleanup thread
 cleanup_thread = threading.Thread(target=cleanup_abandoned_tasks, daemon=True)
 cleanup_thread.start()
+'''
 
 @app.route('/download-partial')
 def download_partial_results():
@@ -1734,6 +1746,7 @@ def debug_task(task_id):
     else:
         return jsonify({'task_exists': False, 'task_id': task_id})
 
+'''Queue
 @app.route('/api/debug/queue')
 def debug_queue():
     """Debug endpoint to check queue status"""
@@ -1773,6 +1786,7 @@ def restart_queue_processor():
             "error": str(e),
             "restarted": False
         }), 500
+'''
 
 @app.route('/api/debug/logs-file')
 def debug_logs_file():
@@ -1792,6 +1806,7 @@ def debug_logs_file():
     except Exception as e:
         return jsonify({"error": str(e)})
 
+'''Queue
 def initialize_queue_system():
     """Initialize queue system after app is fully configured"""
     try:
@@ -1819,11 +1834,12 @@ def initialize_queue_system():
         logging.critical(f"=== QUEUE INITIALIZATION ERROR: {e} ===")
         logging.critical(f"=== QUEUE INIT TRACEBACK: {traceback.format_exc()} ===")
         return False
+'''
 
 if __name__ == '__main__':
     # Initialize queue system after everything is loaded
-    if not initialize_queue_system():
-        logging.critical("❌ CRITICAL: Queue system failed to start!")
+    #if not initialize_queue_system():
+    #    logging.critical("❌ CRITICAL: Queue system failed to start!")
 
     # For Render.com, use the PORT environment variable
     port = int(os.environ.get('PORT', 10000))
