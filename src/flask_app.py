@@ -1579,7 +1579,11 @@ def download_results():
     try:
         # Get the task_id and original filename from query parameters
         task_id = request.args.get('task_id', '')
-        original_filename = request.args.get('filename', 'analysis')
+        original_filename = request.args.get('filename', '')
+        
+        # If no filename provided, try to get it from the task
+        if not original_filename and task_id and task_id in processing_tasks:
+            original_filename = processing_tasks[task_id].get('original_filename', '')
         
         # Create zip file
         memory_file = create_results_zip()

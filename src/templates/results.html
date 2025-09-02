@@ -46,7 +46,7 @@
             </div>
             <div class="col-6">
               <small class="text-muted">AI Tokens Used:</small><br>
-              <strong class="text-success">{{ "{:,}".format(total_tokens) }}</strong>
+              <strong class="text-success">{{ total_tokens }}</strong>
             </div>
           </div>
         </div>
@@ -119,6 +119,8 @@
   
   <script>
   const taskId = '{{ task_id }}';
+  const original_filename = '{{ original_filename }}';
+  const downloadUrl = `/download?task_id=${taskId}&filename=${original_filename}`;
   let heartbeatInterval;
 
   function startHeartbeat(taskId) {
@@ -129,6 +131,48 @@
                   clearInterval(heartbeatInterval);
               });
       }, 30000); // Every 30 seconds
+  }
+
+  // Auto-download with notification
+  window.addEventListener('DOMContentLoaded', function() {
+      // Show notification
+      showDownloadNotification();
+      
+      // Start download after brief delay
+      setTimeout(() => {
+        
+          // Create hidden link and trigger download (works without pop-up blocking)
+          const downloadLink = document.createElement('a');
+          downloadLink.href = downloadUrl;
+          downloadLink.download = '{{ original_filename }}_results'; // Suggests filename
+          downloadLink.style.display = 'none';
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          document.body.removeChild(downloadLink);
+          
+          console.log('Auto-download started');
+      }, 2000); // 2 second delay to show notification
+  });
+
+  function showDownloadNotification() {
+      // Create notification element
+      const notification = document.createElement('div');
+      notification.className = 'alert alert-info alert-dismissible fade show position-fixed';
+      notification.style.cssText = 'top: 20px; right: 20px; z-index: 1050; max-width: 300px;';
+      notification.innerHTML = `
+          <strong>📥 Download Starting...</strong><br>
+          Your results will download automatically in 2 seconds.
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      `;
+      
+      document.body.appendChild(notification);
+      
+      // Auto-remove notification after 5 seconds
+      setTimeout(() => {
+          if (notification.parentNode) {
+              notification.remove();
+          }
+      }, 5000);
   }
 
   // Release queue on page unload (browser close)
