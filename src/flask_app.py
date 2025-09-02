@@ -1588,8 +1588,19 @@ def download_results():
         # Create zip file
         memory_file = create_results_zip()
         
+        # Create proper download filename
+        if original_filename:
+            # Remove file extension and clean filename
+            base_filename = os.path.splitext(original_filename)[0]
+            # Remove any existing '_analysis' suffix to avoid duplication
+            download_name = f'{base_filename}_analysis.zip'
+        else:
+            # Fallback filename with timestamp
+            timestamp = time.strftime('%Y%m%d_%H%M%S')
+            download_name = f'transport_policy_analysis_{timestamp}.zip'
+        
+        logging.info(f"Download prepared: {download_name}")
         # Use the original filename (without extension) for the download
-        base_filename = os.path.splitext(original_filename)[0]
         download_name = f'{base_filename}_analysis.zip'
         
         
@@ -1653,7 +1664,11 @@ def download_partial_results():
     try:
         # Get the task_id and original filename from query parameters
         task_id = request.args.get('task_id', '')
-        original_filename = request.args.get('filename', 'analysis')
+        original_filename = request.args.get('filename', '')
+        
+        # If no filename provided, try to get it from the task
+        if not original_filename and task_id and task_id in processing_tasks:
+            original_filename = processing_tasks[task_id].get('original_filename', '')
         
         # Verify the task exists and has an error
         if task_id not in processing_tasks:
@@ -1666,9 +1681,15 @@ def download_partial_results():
         # Create partial results zip file
         memory_file = create_partial_results_zip()
         
-        # Use the original filename (without extension) for the download
-        base_filename = os.path.splitext(original_filename)[0]
-        download_name = f'{base_filename}_partial_results.zip'
+        # Create proper download filename
+        if original_filename:
+            base_filename = os.path.splitext(original_filename)[0]
+            download_name = f'{base_filename}_partial_results.zip'
+        else:
+            timestamp = time.strftime('%Y%m%d_%H%M%S')
+            download_name = f'transport_policy_partial_{timestamp}.zip'
+        
+        logging.info(f"Partial download prepared: {download_name}")
         
         return send_file(
             memory_file,
