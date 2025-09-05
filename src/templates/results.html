@@ -28,6 +28,41 @@
       font-size: 0.9em;
       margin-bottom: 0;
     }
+    /* Custom classification badge colors */
+    .badge-target {
+      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important;
+      color: #0d47a1 !important;
+      border: 1px solid #2196f3 !important;
+      font-weight: 500;
+    }
+    .badge-mitigation {
+      background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%) !important;
+      color: #e65100 !important;
+      border: 1px solid #ff9800 !important;
+      font-weight: 500;
+    }
+    .badge-adaptation {
+      background: linear-gradient(135deg, #fff3e0 0%, #ffcc80 100%) !important;
+      color: #bf360c !important;
+      border: 1px solid #ff5722 !important;
+      font-weight: 500;
+    }
+    /* Hover effects for badges */
+    .badge-target:hover {
+      background: #bbdefb !important;
+      transform: scale(1.05);
+      transition: all 0.2s ease;
+    }
+    .badge-mitigation:hover {
+      background: #ffecb3 !important;
+      transform: scale(1.05);
+      transition: all 0.2s ease;
+    }
+    .badge-adaptation:hover {
+      background: #ffcc80 !important;
+      transform: scale(1.05);
+      transition: all 0.2s ease;
+    }
   </style>
 </head>
 <body class="bg-light">
@@ -85,6 +120,21 @@
                           <div class="quote-item">
                             <div class="quote-text">{{ quote[1] }}</div>
                             <div class="quote-context">Context: {{ quote[0] }}</div>
+                            <!-- Add classification badges if available -->
+                            {% if classification_data and classification_data.get(quote[1]) %}
+                              <div class="quote-classification mt-2">
+                                {% set class_info = classification_data[quote[1]] %}
+                                {% if class_info.target == 'True' %}
+                                  <span class="badge badge-target me-1">🎯 Target</span>
+                                {% endif %}
+                                {% if class_info.mitigation_measure == 'True' %}
+                                  <span class="badge badge-mitigation me-1">🛡️ Mitigation</span>
+                                {% endif %}
+                                {% if class_info.adaptation_measure == 'True' %}
+                                  <span class="badge badge-adaptation me-1">🌿 Adaptation</span>
+                                {% endif %}
+                              </div>
+                            {% endif %}
                           </div>
                         {% endfor %}
                       </div>
@@ -140,7 +190,7 @@
       
       // Start download after brief delay
       setTimeout(() => {
-        
+
           // Create hidden link and trigger download (works without pop-up blocking)
           const downloadLink = document.createElement('a');
           downloadLink.href = downloadUrl;

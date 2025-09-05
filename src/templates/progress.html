@@ -83,6 +83,25 @@
             border-radius: 5px; 
             margin: 10px 0; 
         }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* Ensure sections have proper styling */
+        #partial-results-container .card {
+            transition: all 0.3s ease;
+        }
+        /* Stage indicator styling */
+        .stage-indicator {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: rgba(0,0,0,0.1);
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -159,6 +178,73 @@
                         </div>
                     </div>
                 </div>
+                <div id="partial-results-container" style="display: none;" class="mt-4">
+    
+                    <!-- Document Partitions Section -->
+                    <div id="partitions-section" style="display: none;" class="card mb-4">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">📄 Document Content Preview</h5>
+                            <small>Showing first 50 sections while processing continues...</small>
+                        </div>
+                        <div class="card-body">
+                            <div id="partitions-container" class="accordion">
+                                <!-- Partitions will be populated here -->
+                            </div>
+                            <div id="partitions-loading" class="text-center py-3">
+                                <div class="spinner-border spinner-border-sm" role="status"></div>
+                                <span class="ms-2">Loading document content...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Semantic Search Results Section -->
+                    <div id="search-section" style="display: none;" class="card mb-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">🔍 Semantic Search Results</h5>
+                            <small>Relevant document sections found - extracting quotes...</small>
+                        </div>
+                        <div class="card-body">
+                            <div id="search-container" class="accordion">
+                                <!-- Search results will be populated here -->
+                            </div>
+                            <div id="search-loading" class="text-center py-3">
+                                <div class="spinner-border spinner-border-sm" role="status"></div>
+                                <span class="ms-2">Performing semantic search...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Extracted Quotes Section -->
+                    <div id="quotes-section" style="display: none;" class="card mb-4">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0">💬 Extracted Quotes</h5>
+                            <small>Relevant quotes found - classification in progress...</small>
+                        </div>
+                        <div class="card-body">
+                            <div id="quotes-container" class="accordion">
+                                <!-- Quotes will be populated here -->
+                            </div>
+                            <div id="quotes-loading" class="text-center py-3">
+                                <div class="spinner-border spinner-border-sm" role="status"></div>
+                                <span class="ms-2">Extracting quotes...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Classification Results Section -->
+                    <div id="classification-section" style="display: none;" class="card mb-4">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0">🏷️ AI Classification Results</h5>
+                            <small>Quotes have been classified into categories</small>
+                        </div>
+                        <div class="card-body">
+                            <div id="classification-container">
+                                <!-- Classification results will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
             </div>
         </div>
         <div class="connection-status" id="connection-status">
@@ -177,6 +263,11 @@
         let lastSuccessfulUpdate = Date.now();
         let isShowingError = false;
         let heartbeatInterval;
+        let partitionsLoaded = false;
+        let quotesLoaded = false;
+        let classificationLoaded = false;
+        let lastPartialResultsCheck = 0;
+        let searchResultsLoaded = false;
 
         function startHeartbeat(taskId) {
             heartbeatInterval = setInterval(() => {
@@ -542,10 +633,348 @@ URL: ${window.location.href}
             }
         }
 
+        function displaySearchResults(searchResults, totalCount) {
+            const searchSection = document.getElementById('search-section');
+            const searchContainer = document.getElementById('search-container');
+            const loadingDiv = document.getElementById('search-loading');
+
+            // Hide loading and show section
+            loadingDiv.style.display = 'none';
+            searchSection.style.display = 'block';
+
+            // Create accordion items for search results
+            let html = '';
+            searchResults.forEach((result, index) => {
+                const pageInfo = result.page || 'Unknown page';
+                const score = result.score ? result.score.toFixed(3) : 'Unknown';
+                
+                html += `
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="search-heading-${index}">
+                            <button class="accordion-button collapsed" type="button" 
+                                    data-bs-toggle="collapse" data-bs-target="#search-collapse-${index}">
+                                <div>
+                                    <span class="badge bg-info me-2">Score: ${score}</span>
+                                    ${pageInfo} - ${result.text.substring(0, 80)}...
+                                </div>
+                            </button>
+                        </h2>
+                        <div id="search-collapse-${index}" class="accordion-collapse collapse">
+                            <div class="accordion-body">
+                                <p class="text-muted small">Page: ${pageInfo} | Relevance Score: ${score}</p>
+                                <div class="text-pre-wrap">${result.text}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Add info about total count
+            html += `
+                <div class="alert alert-info mt-3">
+                    <small>Showing ${searchResults.length} of ${totalCount} relevant sections found</small>
+                </div>
+            `;
+
+            searchContainer.innerHTML = html;
+            logToUser(`[DISPLAY] Loaded ${searchResults.length} semantic search results`);
+        }
+
         function downloadPartialResults() {
             const filename = '{{ request.args.get("filename", "analysis") }}' || 'analysis';
             logToUser('ACTION: Downloading partial results...');
             window.location.href = `/download-partial?task_id=${taskId}&filename=${encodeURIComponent(filename)}`;
+        }
+
+        function hideAllSections() {
+            const sections = ['partitions-section', 'search-section', 'quotes-section', 'classification-section'];
+            sections.forEach(sectionId => {
+                const element = document.getElementById(sectionId);
+                if (element) {
+                    element.style.display = 'none';
+                }
+            });
+        }
+
+        function showSection(sectionId) {
+            const element = document.getElementById(sectionId);
+            if (element) {
+                element.style.display = 'block';
+                // Add smooth transition effect
+                element.style.animation = 'fadeIn 0.5s ease-in';
+            } else {
+                logToUser(`[ERROR] Section ${sectionId} not found!`);
+            }
+        }
+
+        function getCurrentStage(progress) {
+            if (progress >= 80) return 'Classification';
+            if (progress >= 60) return 'Quote Extraction';
+            if (progress >= 30) return 'Semantic Search';
+            if (progress >= 20) return 'Text Partitions';
+            return 'Starting';
+        }
+
+        function checkPartialResults() {
+            // Don't check too frequently
+            const now = Date.now();
+            if (now - lastPartialResultsCheck < 3000) return; 
+            lastPartialResultsCheck = now;
+
+            fetch(`/api/partial-results/${taskId}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Show partial results container if any content is available
+                    if (data.text_partitions.length > 0 || data.search_results.length > 0 || data.extracted_quotes || data.classified_quotes.length > 0) {
+                        document.getElementById('partial-results-container').style.display = 'block';
+                    }
+
+                    // Priority-based replacement (newest/highest priority wins)
+                    let currentStage = 'none';
+                    
+                    // Determine which stage to show (highest priority wins)
+                    if (data.classification_complete && data.progress >= 80) {
+                        currentStage = 'classification';
+                    } else if (data.quote_extraction_complete && data.progress >= 60) {
+                        currentStage = 'quotes';
+                    } else if (data.search_results && data.search_results.length > 0 && data.progress >= 30) {
+                        currentStage = 'search';
+                    } else if (data.text_partitions.length > 0 && data.progress >= 20) {
+                        currentStage = 'partitions';
+                    }
+
+                    // Hide all sections first
+                    hideAllSections();
+
+                    // Show the appropriate section based on current stage
+                    switch (currentStage) {
+                        case 'classification':
+                            if (!classificationLoaded) {
+                                displayClassificationResults(data.classified_quotes);
+                                classificationLoaded = true;
+                                logToUser(`[PARTIAL] 🏷️ Classification results loaded - Stage 4/4`);
+                            }
+                            showSection('classification-section');
+                            break;
+
+                        case 'quotes':
+                            if (!quotesLoaded) {
+                                displayExtractedQuotes(data.extracted_quotes);
+                                quotesLoaded = true;
+                                logToUser(`[PARTIAL] 💬 Extracted quotes loaded - Stage 3/4`);
+                            }
+                            showSection('quotes-section');
+                            break;
+
+                        case 'search':
+                            if (!searchResultsLoaded) {
+                                displaySearchResults(data.search_results, data.total_search_results);
+                                searchResultsLoaded = true;
+                                logToUser(`[PARTIAL] 🔍 Search results loaded - Stage 2/4`);
+                            }
+                            showSection('search-section');
+                            break;
+
+                        case 'partitions':
+                            if (!partitionsLoaded) {
+                                displayDocumentPartitions(data.text_partitions, data.total_partitions);
+                                partitionsLoaded = true;
+                                logToUser(`[PARTIAL] 📄 Document partitions loaded - Stage 1/4`);
+                            }
+                            showSection('partitions-section');
+                            break;
+
+                        default:
+                            logToUser(`[PARTIAL] No content ready to display yet...`);
+                    }
+
+                    logToUser(`[PARTIAL-DEBUG] Progress: ${data.progress}% | Current Stage: ${currentStage} | Flags: P:${data.text_partitions.length>0} S:${data.search_results?.length>0} Q:${data.quote_extraction_complete} C:${data.classification_complete}`);
+                })
+                .catch(error => {
+                    console.log('Partial results check failed:', error);
+                    logToUser(`[PARTIAL-ERROR] ${error.message}`);
+                });
+        }
+
+        function showSection(sectionId) {
+            const element = document.getElementById(sectionId);
+            if (element) {
+                element.style.display = 'block';
+                // Add smooth transition effect
+                element.style.animation = 'fadeIn 0.5s ease-in';
+            } else {
+                logToUser(`[ERROR] Section ${sectionId} not found!`);
+            }
+        }
+        function displayDocumentPartitions(partitions, totalCount) {
+            const partitionsSection = document.getElementById('partitions-section');
+            const partitionsContainer = document.getElementById('partitions-container');
+            const loadingDiv = document.getElementById('partitions-loading');
+
+            // Hide loading and show section
+            loadingDiv.style.display = 'none';
+            partitionsSection.style.display = 'block';
+
+            // Create accordion items for partitions
+            let html = '';
+            partitions.forEach((partition, index) => {
+                const elementType = partition.element_type || 'Text';
+                const pageInfo = partition.metadata?.page_number ? `Page ${partition.metadata.page_number}` : 'Unknown page';
+                
+                html += `
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="partition-heading-${index}">
+                            <button class="accordion-button collapsed" type="button" 
+                                    data-bs-toggle="collapse" data-bs-target="#partition-collapse-${index}">
+                                <div>
+                                    <span class="badge bg-secondary me-2">${elementType}</span>
+                                    ${pageInfo} - ${partition.text.substring(0, 100)}...
+                                </div>
+                            </button>
+                        </h2>
+                        <div id="partition-collapse-${index}" class="accordion-collapse collapse">
+                            <div class="accordion-body">
+                                <p class="text-muted small">Type: ${elementType} | ${pageInfo}</p>
+                                <div class="text-pre-wrap">${partition.text}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Add info about total count
+            html += `
+                <div class="alert alert-info mt-3">
+                    <small>Showing first ${partitions.length} of ${totalCount} document sections</small>
+                </div>
+            `;
+
+            partitionsContainer.innerHTML = html;
+            logToUser(`[DISPLAY] Loaded ${partitions.length} document partitions for preview`);
+        }
+
+        function displayExtractedQuotes(quotesData) {
+            const quotesSection = document.getElementById('quotes-section');
+            const quotesContainer = document.getElementById('quotes-container');
+            const loadingDiv = document.getElementById('quotes-loading');
+
+            // Hide loading and show section
+            loadingDiv.style.display = 'none';
+            quotesSection.style.display = 'block';
+
+            // Create accordion items for quotes (similar to results.html structure)
+            let html = '';
+            let quoteIndex = 0;
+            
+            for (const [index, item] of Object.entries(quotesData)) {
+                if (item.quotes && item.quotes.length > 0) {
+                    html += `
+                        <div class="accordion-item mb-2">
+                            <h2 class="accordion-header" id="quote-heading-${quoteIndex}">
+                                <button class="accordion-button collapsed" type="button" 
+                                        data-bs-toggle="collapse" data-bs-target="#quote-collapse-${quoteIndex}">
+                                    <div>
+                                        Page ${item.page_number} - Relevance: ${item.score.toFixed(2)}
+                                        <span class="badge rounded-pill bg-success ms-2">${item.quotes.length} quote(s)</span>
+                                    </div>
+                                </button>
+                            </h2>
+                            <div id="quote-collapse-${quoteIndex}" class="accordion-collapse collapse">
+                                <div class="accordion-body">
+                                    <div class="card mb-3">
+                                        <div class="card-header bg-success text-white">
+                                            <h6 class="mb-0">Extracted Quotes</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            ${item.quotes.map(quote => `
+                                                <div class="quote-item mb-3" style="border-left: 3px solid #198754; padding-left: 15px;">
+                                                    <div class="quote-text" style="font-style: italic; font-weight: 500;">${quote[1]}</div>
+                                                    <div class="quote-context" style="color: #6c757d; font-size: 0.9em;">Context: ${quote[0]}</div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                    <div class="card">
+                                        <div class="card-header bg-primary text-white">
+                                            <h6 class="mb-0">Full Context</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="text-pre-wrap">${item.content}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    quoteIndex++;
+                }
+            }
+
+            if (html === '') {
+                html = '<div class="alert alert-warning">No quotes were extracted from this document.</div>';
+            }
+
+            quotesContainer.innerHTML = html;
+            logToUser(`[DISPLAY] Loaded extracted quotes for preview`);
+        }
+
+        function displayClassificationResults(classifiedData) {
+            const classificationSection = document.getElementById('classification-section');
+            const classificationContainer = document.getElementById('classification-container');
+
+            // Show section
+            classificationSection.style.display = 'block';
+
+            // Create summary of classification results
+            const categories = {};
+            classifiedData.forEach(item => {
+                // Count quotes by category
+                if (item.target === 'True') categories['Targets'] = (categories['Targets'] || 0) + 1;
+                if (item.mitigation_measure === 'True') categories['Mitigation'] = (categories['Mitigation'] || 0) + 1;
+                if (item.adaptation_measure === 'True') categories['Adaptation'] = (categories['Adaptation'] || 0) + 1;
+            });
+            
+            // Color mapping for categories
+            const categoryColors = {
+                'Targets': { bg: 'bg-info', text: 'text-dark', icon: '🎯' },
+                'Mitigation': { bg: 'bg-warning', text: 'text-dark', icon: '🛡️' },
+                'Adaptation': { bg: 'bg-warning', text: 'text-dark', icon: '🌿' }
+            };
+
+            let html = `
+                <div class="row">
+                    <div class="col-md-12">
+                        <h6>Classification Summary:</h6>
+                        <div class="row">
+            `;
+
+            for (const [category, count] of Object.entries(categories)) {
+                const colors = categoryColors[category] || { bg: 'bg-secondary', text: 'text-white', icon: '📊' };
+                html += `
+                    <div class="col-md-4 mb-3">
+                        <div class="card ${colors.bg} ${colors.text}">
+                            <div class="card-body text-center">
+                                <div style="font-size: 2rem;">${colors.icon}</div>
+                                <h5 class="card-title">${count}</h5>
+                                <p class="card-text">${category}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            html += `
+                        </div>
+                        <div class="alert alert-success">
+                            <strong>🎉 Classification Complete!</strong> All quotes have been categorized. 
+                            Click "View Full Results" when processing finishes to see detailed classifications.
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            classificationContainer.innerHTML = html;
+            logToUser(`[DISPLAY] Classification results loaded`);
         }
 
         function updateProgress() {
@@ -602,6 +1031,9 @@ URL: ${window.location.href}
                 // Update progress display safely
                 try {
                     updateProgressDisplay(data.progress, data.status || `Processing... ${data.progress}%`);
+                    
+                    // Check for partial results
+                    checkPartialResults();
                 } catch (displayError) {
                     logToUser(`[WARNING] Display update failed: ${displayError.message}`);
                     // Continue anyway - don't let display errors stop polling

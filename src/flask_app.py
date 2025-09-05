@@ -34,7 +34,7 @@ from langchain.schema import HumanMessage
 from langchain_community.vectorstores import FAISS # https://python.langchain.com/docs/integrations/vectorstores/faiss/
 from langchain.docstore.document import Document
 from langchain_community.callbacks import get_openai_callback
-from openai import InternalServerError
+from openai import InternalServerError, RateLimitError
 import json
 from unstructured.partition.pdf import partition_pdf
 from unstructured.chunking.title import chunk_by_title
@@ -1106,6 +1106,10 @@ def process_document(task_id, file_path, query_terms, filename, document_pages=N
         processing_tasks[task_id]["status"] = "Text extraction completed."
         processing_tasks[task_id]["last_heartbeat"] = time.time()
         processing_tasks[task_id]["partial_results"]["text_extraction"] = True  # Mark as completed
+        processing_tasks[task_id]["partial_results"]["text_partitions"] = unstructured_text[:50]  # Limit for performance
+        processing_tasks[task_id]["partial_results"]["total_partitions"] = len(unstructured_text)
+        processing_tasks[task_id]["partial_results"]["text_extraction_complete"] = True
+        processing_tasks[task_id]["status"] = "Text extraction completed."
         preprocessing_time = time.time() - start_time
         logging.info(f"Text extraction completed for file: {filename} in {preprocessing_time:.2f} seconds.")
         
@@ -1123,10 +1127,12 @@ def process_document(task_id, file_path, query_terms, filename, document_pages=N
         chunks = semantic_search_FAISS(unstructured_text, query_terms, 
                                       os.path.splitext(os.path.basename(file_path))[0],
                                       embedding_model=EMBEDDING)
+        processing_tasks[task_id]["partial_results"]["search_results"] = chunks[:20]  # Limit for performance
+        processing_tasks[task_id]["partial_results"]["total_search_results"] = len(chunks)
+        processing_tasks[task_id]["partial_results"]["semantic_search_complete"] = True  # Mark as completed
         processing_tasks[task_id]["progress"] = 30
         processing_tasks[task_id]["status"] = "Semantic search completed."
         processing_tasks[task_id]["last_heartbeat"] = time.time()
-        processing_tasks[task_id]["partial_results"]["semantic_search"] = True  # Mark as completed
         retrieval_time = time.time() - start_time
         logging.info(f"Semantic search completed for file: {filename} in {retrieval_time:.2f} seconds.")
         
@@ -1140,6 +1146,8 @@ def process_document(task_id, file_path, query_terms, filename, document_pages=N
         processing_tasks[task_id]["last_heartbeat"] = time.time()
         citations, tokens_used = extract_quotes(chunks, os.path.basename(file_path))
         total_tokens_used += tokens_used  # Update total tokens used
+        processing_tasks[task_id]["partial_results"]["extracted_quotes"] = citations
+        processing_tasks[task_id]["partial_results"]["quote_extraction_complete"] = True
         processing_tasks[task_id]["progress"] = 60
         processing_tasks[task_id]["status"] = "Quote extraction completed."
         processing_tasks[task_id]["last_heartbeat"] = time.time()
@@ -1165,7 +1173,9 @@ def process_document(task_id, file_path, query_terms, filename, document_pages=N
             tokens_used = cb.total_tokens
             total_tokens_used += tokens_used  # Update total tokens used
         app.logger.info(f"[TASK {task_id}] Quote classification completed successfully")
-
+        
+        processing_tasks[task_id]["partial_results"]["classified_quotes"] = classified.to_dict('records')
+        processing_tasks[task_id]["partial_results"]["classification_complete"] = True
         processing_tasks[task_id]["progress"] = 80
         processing_tasks[task_id]["status"] = "AI classification completed."
         processing_tasks[task_id]["last_heartbeat"] = time.time()
@@ -1423,6 +1433,14 @@ def results(task_id):
         total_runtime_seconds = task.get("total_runtime_seconds", 0)
         total_tokens_used = task.get("total_tokens_used", 0)
         
+        # Get classification data if available
+        classification_data = {}
+        if "classified_quotes" in task.get("partial_results", {}):
+            classified_quotes = task["partial_results"]["classified_quotes"]
+            # Create lookup dictionary for quick access
+            for item in classified_quotes:
+                classification_data[item.get('quote', '')] = item
+
         # Format runtime for display
         if total_runtime_seconds > 3600:  # More than 1 hour
             runtime_display = f"{total_runtime_seconds/3600:.1f} hours"
@@ -1434,6 +1452,7 @@ def results(task_id):
         return render_template(
             'results.html',
             citations=citations,
+            classification_data=classification_data,  # NEW
             results_folder='results',
             task_id=task_id,
             original_filename=original_filename,
@@ -1655,6 +1674,50 @@ def cleanup_abandoned_tasks():
 cleanup_thread = threading.Thread(target=cleanup_abandoned_tasks, daemon=True)
 cleanup_thread.start()
 '''
+
+@app.route('/api/partial-results/<task_id>')
+def get_partial_results(task_id):
+    """Get partial results for progressive display"""
+    try:
+        if task_id not in processing_tasks:
+            return jsonify({"error": "Task not found"}), 404
+        
+        task = processing_tasks[task_id]
+        partial_results = task.get("partial_results", {})
+        
+        return jsonify({
+            "task_id": task_id,
+            "progress": task.get("progress", 0),
+            "status": task.get("status", "Processing..."),
+            "text_partitions": partial_results.get("text_partitions", []),
+            "total_partitions": partial_results.get("total_partitions", 0),
+            "text_extraction_complete": partial_results.get("text_extraction_complete", False),
+            "search_results": partial_results.get("search_results", []),
+            "total_search_results": partial_results.get("total_search_results", 0),
+            "semantic_search_complete": partial_results.get("semantic_search_complete", False),
+            "extracted_quotes": partial_results.get("extracted_quotes", {}),
+            "quote_extraction_complete": partial_results.get("quote_extraction_complete", False),
+            "classified_quotes": partial_results.get("classified_quotes", []),
+            "classification_complete": partial_results.get("classification_complete", False),
+            "original_filename": task.get("original_filename", "Unknown")
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/partitions/<task_id>')
+def get_document_partitions(task_id):
+    """Get document partitions for display"""
+    if task_id not in processing_tasks:
+        return jsonify({"error": "Task not found"}), 404
+    
+    task = processing_tasks[task_id]
+    partitions = task.get("partial_results", {}).get("text_partitions", [])
+    
+    return jsonify({
+        "partitions": partitions,
+        "total_count": task.get("partial_results", {}).get("total_partitions", 0),
+        "showing_count": len(partitions)
+    })
 
 @app.route('/download-partial')
 def download_partial_results():
