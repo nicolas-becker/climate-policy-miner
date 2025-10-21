@@ -89,6 +89,156 @@
     </div>
     {% endif %}
 
+    {% if summary_data and summary_data.summary_sections %}
+    <div class="card mb-5 shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">📊 AI-Generated Summary & Insights</h4>
+                <span class="badge bg-light text-dark">
+                    {{ summary_data.statistics.total_quotes }} quotes analyzed
+                </span>
+            </div>
+        </div>
+        <div class="card-body">
+
+            <!-- Executive Summary -->
+            {% if summary_data.summary_sections.executive_summary %}
+            <div class="mb-4">
+                <h5 class="text-primary mb-3">📋 Executive Summary</h5>
+                <div class="alert alert-primary bg-light border-primary">
+                    <p class="mb-0 lead">{{ summary_data.summary_sections.executive_summary }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Key Findings -->
+            {% if summary_data.summary_sections.key_findings %}
+            <div class="mb-4">
+                <h5 class="text-success mb-3">🔍 Key Findings</h5>
+                <ul class="list-group list-group-flush">
+                    {% for finding in summary_data.summary_sections.key_findings %}
+                    <li class="list-group-item border-0 ps-0">
+                        <i class="fas fa-check-circle text-success me-2"></i>
+                        {{ finding }}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            
+            <!-- ✅ Economy-wide Targets - ALWAYS SHOW -->
+            <div class="mb-4">
+                <h5 class="mb-3" style="color: #6f42c1;">
+                    🎯 Economy-wide Targets 
+                    <span class="badge" style="background-color: #6f42c1; font-size: 0.7em;">
+                        {{ summary_data.statistics.categorized_counts.economy_wide_targets }} found
+                    </span>
+                </h5>
+                <div class="alert alert-light border" style="border-color: #6f42c1 !important;">
+                    {% if summary_data.summary_sections.economy_wide_targets %}
+                        <ul class="mb-0">
+                            {% for target in summary_data.summary_sections.economy_wide_targets %}
+                            <li class="mb-2">{{ target }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="mb-0 text-muted">No specific economy-wide targets identified in this document.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- ✅ Transport Targets - ALWAYS SHOW -->
+            <div class="mb-4">
+                <h5 class="mb-3" style="color: #0d47a1;">
+                    🚗 Transport Sector Targets 
+                    <span class="badge" style="background-color: #0d47a1; font-size: 0.7em;">
+                        {{ summary_data.statistics.categorized_counts.transport_targets }} found
+                    </span>
+                </h5>
+                <div class="alert alert-light border" style="border-color: #0d47a1 !important;">
+                    {% if summary_data.summary_sections.transport_targets %}
+                        <ul class="mb-0">
+                            {% for target in summary_data.summary_sections.transport_targets %}
+                            <li class="mb-2">{{ target }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="mb-0 text-muted">No specific transport sector targets identified in this document.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- ✅ Mitigation Actions - ALWAYS SHOW -->
+            <div class="mb-4">
+                <h5 class="mb-3" style="color: #e65100;">
+                    🛡️ Mitigation Actions 
+                    <span class="badge" style="background-color: #e65100; font-size: 0.7em;">
+                        {{ summary_data.statistics.categorized_counts.mitigation_actions }} found
+                    </span>
+                </h5>
+                <div class="alert alert-light border" style="border-color: #e65100 !important;">
+                    {% if summary_data.summary_sections.mitigation_actions %}
+                        <ul class="mb-0">
+                            {% for action in summary_data.summary_sections.mitigation_actions %}
+                            <li class="mb-2">{{ action }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="mb-0 text-muted">No specific mitigation actions identified in this document.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- ✅ Adaptation Actions - ALWAYS SHOW -->
+            <div class="mb-4">
+                <h5 class="mb-3" style="color: #bf360c;">
+                    🌿 Adaptation Actions 
+                    <span class="badge" style="background-color: #bf360c; font-size: 0.7em;">
+                        {{ summary_data.statistics.categorized_counts.adaptation_actions }} found
+                    </span>
+                </h5>
+                <div class="alert alert-light border" style="border-color: #bf360c !important;">
+                    {% if summary_data.summary_sections.adaptation_actions %}
+                        <ul class="mb-0">
+                            {% for action in summary_data.summary_sections.adaptation_actions %}
+                            <li class="mb-2">{{ action }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="mb-0 text-muted">No specific adaptation actions identified in this document.</p>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Raw Summary (Fallback) -->
+            {% if not summary_data.summary_sections.executive_summary and summary_data.summary_text %}
+            <div class="mb-4">
+                <h5 class="text-secondary mb-3">📄 AI Analysis</h5>
+                <div class="border rounded p-3 bg-light">
+                    <pre class="mb-0" style="white-space: pre-wrap; font-family: inherit;">{{ summary_data.summary_text }}</pre>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Generation Info -->
+            <div class="row mt-4 pt-3 border-top">
+                <div class="col-md-6">
+                    <small class="text-muted">
+                        <i class="fas fa-robot me-1"></i>
+                        Generated using AI analysis of {{ summary_data.statistics.total_quotes }} extracted quotes
+                    </small>
+                </div>
+                <div class="col-md-6 text-end">
+                    <small class="text-muted">
+                        <i class="fas fa-coins me-1"></i>
+                        Tokens used: {{ summary_data.tokens_used }}
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     {% if citations %}
       <!-- Main Citations Accordion -->
       <div class="accordion mb-5" id="citationsAccordion">
