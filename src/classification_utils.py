@@ -1309,24 +1309,37 @@ def tagging_classifier_quotes(quotes_dict, llm, fewshot = True):
 
     """
     # initialize output dataframes
-    output_df = pd.DataFrame(columns=['document', 'page', 'info_type', 'quote', 'target_labels', 'measure_labels', 'target_area', 'ghg_target', 'conditionality', 'category', 'purpose', 'instrument', 'asi'])
+    output_df = pd.DataFrame(columns=['document', 'page', 'info_type', 'quote', 'verification_status', 'verified', 'target_labels', 'measure_labels', 'target_area', 'ghg_target', 'conditionality', 'category', 'purpose', 'instrument', 'asi'])
     
+    # Collect all quotes with their verification status
+    all_quotes = []
+    quote_verification_status = []
+
     for key, value in quotes_dict.items():
         
-        if type(value) == str:
+        if isinstance(value, str):
             continue
 
-        # check if quotes available
+        # check if quotes available (both verified and unverified are now combined)
         if len(value['quotes'])>0:
             
-            for q in value['quotes']:            
+            for q in value['quotes']:     
+                # Extract verification status from the tuple
+                if len(q) >= 3:
+                    index, quote_text, is_verified = q[0], q[1], q[2]
+                else:
+                    # Fallback for old format
+                    index, quote_text, is_verified = q[0], q[1], True
+
                 #create entry for each quote
                 entry = []
                 entry.append(value['filename'])
                 entry.append(int(value['page_number']))
                 entry.append(value['type'])
                 #entry.append(str(value['keywords']))
-                entry.append(q[1])
+                entry.append(quote_text)
+                entry.append('Verified' if is_verified else 'Unverified')  # verification_status
+                entry.append(is_verified)  # verified (boolean)
                 entry.append('NONE') #placeholder for target labels
                 entry.append('NONE') #placeholder for measure labels
                 entry.append('NONE') #placeholder for target_area
@@ -1337,13 +1350,16 @@ def tagging_classifier_quotes(quotes_dict, llm, fewshot = True):
                 entry.append('NONE') #placeholder for instrument
                 entry.append('NONE') #placeholder for asi
                 output_df.loc[len(output_df.index)] = entry
+                all_quotes.append(quote_text)
+                quote_verification_status.append(is_verified)
                 
+    # Perform classification on all quotes
     if fewshot:
         type_df, targets_df, mtype_df, mitigation_df, adaptation_df = get_tagging_results_fewshot(quotes=output_df.quote, llm=llm)
     else:      
         type_df, targets_df, mtype_df, mitigation_df, adaptation_df = get_tagging_results(quotes=output_df.quote, llm=llm)
                 
-    # concatenate both DataFrames
+    # Concatenate output_df and classification results
     output_df = pd.concat([output_df, type_df, targets_df, mtype_df, mitigation_df, adaptation_df], axis=1)        
     
     # mapping
@@ -1354,8 +1370,16 @@ def tagging_classifier_quotes(quotes_dict, llm, fewshot = True):
         output_df['conditionality'] = output_df.apply(lambda row : conditionality_mapping(row), axis=1)
 
         output_df['measure_labels'] = output_df.apply(lambda row : measure_mapping(row), axis=1)
+
+        # Create a mapping of original row index to verification status
+        verification_mapping = output_df[['quote', 'verification_status', 'verified']].copy()
         # Explode measure_labels so each label gets its own row
         output_df = output_df.explode('measure_labels').reset_index(drop=True)
+
+        # This ensures each exploded row keeps its verification status
+        output_df = output_df.drop(['verification_status', 'verified'], axis=1)  # Remove old columns
+        output_df = output_df.merge(verification_mapping, on='quote', how='left')  # Re-add verification info
+
         output_df['instrument'] = output_df.apply(lambda row : instrument_mapping(row), axis=1)
         output_df['purpose'] = output_df.apply(lambda row : purpose_mapping(row), axis=1)
         output_df['category'] = output_df.apply(lambda row : category_mapping(row), axis=1)

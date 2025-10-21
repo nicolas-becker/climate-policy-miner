@@ -773,11 +773,38 @@ def extract_text_and_highlight(pdf_path, query_terms):
     #highlighted_path = highlight_terms_in_pdf(pdf_path, query_terms)
     return citations#, highlighted_path
 
+def debug_quote_processing(quotes_dict, task_id):
+    """Debug function to trace quote processing"""
+    logging.info(f"[DEBUG {task_id}] === QUOTE PROCESSING DEBUG ===")
+    
+    total_verified = 0
+    total_unverified = 0
+    
+    for key, quote_info in quotes_dict.items():
+        verified_quotes = quote_info.get('quotes', [])
+        unverified_quotes = quote_info.get('unverified_quotes', [])
+        
+        logging.info(f"[DEBUG {task_id}] Source {key}:")
+        logging.info(f"[DEBUG {task_id}]   Verified quotes: {len(verified_quotes)}")
+        logging.info(f"[DEBUG {task_id}]   Unverified quotes: {len(unverified_quotes)}")
+        
+        for i, quote_tuple in enumerate(verified_quotes):
+            logging.info(f"[DEBUG {task_id}]     V{i}: {len(quote_tuple)} elements - {quote_tuple[1][:50]}...")
+            total_verified += 1
+            
+        for i, quote_tuple in enumerate(unverified_quotes):
+            logging.info(f"[DEBUG {task_id}]     U{i}: {len(quote_tuple)} elements - {quote_tuple[1][:50]}...")
+            total_unverified += 1
+    
+    logging.info(f"[DEBUG {task_id}] TOTALS: {total_verified} verified, {total_unverified} unverified")
+    return total_verified, total_unverified
+
 def classify_quotes(quotes_dict, file_directory):
     """
     Step 4 of the Pipeline:
     -----------------------
     This function classifies the extracted quotes into predefined categories.
+    Now includes both verified and unverified quotes with verification status.
     
     Params:
         quotes_dict (dict): A dictionary containing the previously extracted quotes.
@@ -787,9 +814,96 @@ def classify_quotes(quotes_dict, file_directory):
     """
     try:
         app.logger.info(f"Starting classification with {len(quotes_dict)} quotes")
-    
+        
+        # DEBUG: Check what we're starting with
+        task_id = processing_tasks.get('current_task_id', 'unknown')
+        debug_quote_processing(quotes_dict, task_id)
+        
+        # Prepare quotes_dict to include both verified and unverified quotes
+        enhanced_quotes_dict = {}
+        total_verified = 0
+        total_unverified = 0
+
+        for key, quote_info in quotes_dict.items():
+            enhanced_quotes_dict[key] = quote_info.copy()
+            
+            # Combine verified and unverified quotes with verification status
+            all_quotes = []
+
+            # Add verified quotes (should have 3 elements: index, text, verified)
+            verified_quotes = quote_info.get('quotes', [])
+            for quote_tuple in verified_quotes:
+                if len(quote_tuple) >= 3:
+                    # New format with verification status
+                    all_quotes.append((quote_tuple[0], quote_tuple[1], quote_tuple[2]))
+                    if quote_tuple[2]:  # if verified
+                        total_verified += 1
+                    else:
+                        total_unverified += 1
+                elif len(quote_tuple) >= 2:
+                    # Old format without verification status - assume verified
+                    all_quotes.append((quote_tuple[0], quote_tuple[1], True))
+                    total_verified += 1           
+                else:
+                    app.logger.warning(f"[CLASSIFY {task_id}] Invalid verified quote tuple: {quote_tuple}")
+            
+            # Add unverified quotes  
+            unverified_quotes = quote_info.get('unverified_quotes', [])
+            for quote_tuple in unverified_quotes:
+                if len(quote_tuple) >= 3:
+                    all_quotes.append((quote_tuple[0], quote_tuple[1], quote_tuple[2]))
+                    if quote_tuple[2]:
+                        total_verified += 1
+                    else:
+                        total_unverified += 1
+                elif len(quote_tuple) >= 2:
+                    # Old format - assume unverified
+                    all_quotes.append((quote_tuple[0], quote_tuple[1], False))
+                    total_unverified += 1
+                else:
+                    app.logger.warning(f"[CLASSIFY {task_id}] Invalid unverified quote tuple: {quote_tuple}")
+            
+            # Replace the quotes list with enhanced version - Keep the 3-element structure for quotes
+            enhanced_quotes_dict[key]['quotes'] = all_quotes
+            # Remove the separate unverified_quotes since they're now combined
+            enhanced_quotes_dict[key].pop('unverified_quotes', None)
+
+        app.logger.info(f"Processing {total_verified} verified + {total_unverified} unverified quotes = {total_verified + total_unverified} total")
+
         # Classification of quotes into predefined categories
-        output_df = tagging_classifier_quotes(quotes_dict=quotes_dict, llm=LLM, fewshot=True)
+        output_df = tagging_classifier_quotes(quotes_dict=enhanced_quotes_dict, llm=LLM, fewshot=True)
+        
+        # ✅ Verification status is already included in the DataFrame
+        if 'verification_status' in output_df.columns:
+            verified_count = (output_df['verification_status'] == 'Verified').sum()
+            unverified_count = (output_df['verification_status'] == 'Unverified').sum()
+            app.logger.info(f"[CLASSIFY {task_id}] Final verification counts: {verified_count} verified, {unverified_count} unverified")
+
+        '''
+        # NEW: Add verification status column to the DataFrame
+        # We need to map the verification status back to the classified quotes
+        verification_status = []
+        quote_index = 0
+        
+        for key, value in quotes_dict.items():
+            for quote_tuple in value['quotes']:
+                if quote_index < len(output_df):
+                    # Extract verification status from the 3rd element
+                    is_verified = quote_tuple[2] if len(quote_tuple) > 2 else True
+                    verification_status.append(is_verified)
+                quote_index += 1
+        
+        # Add verification column to DataFrame
+        if len(verification_status) == len(output_df):
+            output_df['verified'] = verification_status
+            output_df['verification_status'] = output_df['verified'].apply(lambda x: 'Verified' if x else 'Unverified')
+            app.logger.info(f"✅ Verification status added: {sum(verification_status)} verified, {len(verification_status) - sum(verification_status)} unverified")
+        else:
+            app.logger.warning(f"❌ Verification status length mismatch: {len(verification_status)} vs {len(output_df)}")
+            # Fallback - mark all as verified
+            output_df['verified'] = True
+            output_df['verification_status'] = 'Verified'
+        '''
 
         # Save results in Excel and CSV{LLM.model_name}_{namespace}
         by_products_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'by-products')
@@ -798,16 +912,16 @@ def classify_quotes(quotes_dict, file_directory):
         try:
             excel_path = os.path.join(by_products_folder, f"{os.path.splitext(os.path.basename(file_directory))[0]}_fewshot-tagging_{LLM.model_name}.xlsx")
             output_df.to_excel(excel_path)
-            app.logger.info(f"Saved Excel: {excel_path}")
+            app.logger.info(f"[CLASSIFY {task_id}] Saved Excel: {excel_path}")
         except Exception as excel_error:
-            app.logger.error(f"Failed to save Excel: {excel_error}")
+            app.logger.error(f"[CLASSIFY {task_id}] Failed to save Excel: {excel_error}")
             
         try:
             csv_path = os.path.join(by_products_folder, f"{os.path.splitext(os.path.basename(file_directory))[0]}_fewshot-tagging_{LLM.model_name}.csv")
             output_df.to_csv(csv_path)
-            app.logger.info(f"Saved CSV: {csv_path}")
+            app.logger.info(f"[CLASSIFY {task_id}] Saved CSV: {csv_path}")
         except Exception as csv_error:
-            app.logger.error(f"Failed to save CSV: {csv_error}")
+            app.logger.error(f"[CLASSIFY {task_id}] Failed to save CSV: {csv_error}")
 
 
         # TODO: Save the classified quotes to a JSON file
@@ -828,7 +942,7 @@ def postprocess_results(file_directory, output_df, filename, summary_data=None):
     -----------------------
     This function performs several postprocessing steps on the output DataFrame from the pipeline.
     It generates highlighted PDFs, and saves specific subsets of the data (targets, mitigation measures, 
-    and adaptation measures) to both Excel and CSV files.
+    and adaptation measures) to both Excel and CSV files, and includes verification status.
 
     Params:
         input_file (str): The directory of the input file.
@@ -852,43 +966,46 @@ def postprocess_results(file_directory, output_df, filename, summary_data=None):
 
     #  targets
     targets_output_df = output_df[output_df['target']=='True']
-    targets_output_df = targets_output_df[['quote', 'page', 'target_labels', 'target_area', 'ghg_target', 'conditionality']]
+    targets_output_df = targets_output_df[['quote', 'page', 'target_labels', 'target_area', 'ghg_target', 'conditionality', 'verification_status']]
     targets_output_df = targets_output_df.rename(columns={
         'quote': 'Content',
         'page': 'Page Number',
         'target_area': 'Target area',
         'ghg_target': 'GHG target?',
-        'conditionality': 'Conditionality'
+        'conditionality': 'Conditionality',
+        'verification_status': 'Verification Status'
     })
     targets_output_df["Target scope"] = ""
     targets_output_df["Target type"] = ""
     targets_output_df["Target year"] = ""
-    targets_output_df = targets_output_df[["Target area", "Target scope", "GHG target?", "Target type", "Conditionality", "Target year", "Content", "Page Number"]]
+    targets_output_df = targets_output_df[["Target area", "Target scope", "GHG target?", "Target type", "Conditionality", "Target year", "Content", "Page Number", "Verification Status"]]
 
     #  mitigation
     mitigation_output_df = output_df[output_df['mitigation_measure']=='True']
-    mitigation_output_df = mitigation_output_df[['quote', 'page', 'measure_labels', 'category', 'purpose', 'instrument', 'asi']]
+    mitigation_output_df = mitigation_output_df[['quote', 'page', 'measure_labels', 'category', 'purpose', 'instrument', 'asi', 'verification_status']]
     mitigation_output_df = mitigation_output_df.rename(columns={
         'quote': 'Quote',
         'page': 'Page Number',
         'category': 'Category',
         'purpose': 'Purpose',
         'instrument': 'Instrument',
-        'asi': 'A-S-I'
+        'asi': 'A-S-I',
+        'verification_status': 'Verification Status'
     })
-    mitigation_output_df = mitigation_output_df[["Category", "Purpose", "Instrument", "Quote", "A-S-I", "Page Number"]]
-    
+    mitigation_output_df = mitigation_output_df[["Category", "Purpose", "Instrument", "Quote", "A-S-I", "Page Number", "Verification Status"]]
+
     #  adaptation
     adaptation_output_df = output_df[output_df['adaptation_measure']=='True']
-    adaptation_output_df = adaptation_output_df[['quote', 'page', 'measure_labels', 'category', 'instrument']]
+    adaptation_output_df = adaptation_output_df[['quote', 'page', 'measure_labels', 'category', 'instrument', 'verification_status']]
     adaptation_output_df = adaptation_output_df.rename(columns={
         'quote': 'Quote',
         'page': 'Page Number',
         'category': 'Category',
-        'instrument': 'Measure'
+        'instrument': 'Measure',
+        'verification_status': 'Verification Status'
     })
-    adaptation_output_df = adaptation_output_df[["Category", "Measure", "Quote", "Page Number"]]
-    
+    adaptation_output_df = adaptation_output_df[["Category", "Measure", "Quote", "Page Number", "Verification Status"]]
+
     # Save summary as human-readable text to output folder
     summary_txt_path = os.path.join(output_folder, f"{os.path.splitext(os.path.basename(filename))[0]}_ai_summary.txt")
     if summary_data:
@@ -957,6 +1074,46 @@ def postprocess_results(file_directory, output_df, filename, summary_data=None):
         targets_output_df.to_excel(writer, sheet_name="Targets", index=False)
         mitigation_output_df.to_excel(writer, sheet_name="Mitigation", index=False)
         adaptation_output_df.to_excel(writer, sheet_name="Adaptation", index=False)
+
+        # ✅ NEW: Add conditional formatting for verification status
+        workbook = writer.book
+        
+        # Define formats for verification status
+        verified_format = workbook.add_format({'bg_color': '#d4edda', 'font_color': '#155724'})
+        unverified_format = workbook.add_format({'bg_color': '#f8d7da', 'font_color': '#721c24'})
+        
+        # Apply formatting to each sheet
+        for sheet_name in ["Targets", "Mitigation", "Adaptation"]:
+            worksheet = writer.sheets[sheet_name]
+            
+            # Find the verification status column (should be the last column)
+            if sheet_name == "Targets":
+                last_col = len(targets_output_df.columns) - 1
+                last_row = len(targets_output_df)
+            elif sheet_name == "Mitigation":
+                last_col = len(mitigation_output_df.columns) - 1
+                last_row = len(mitigation_output_df)
+            else:  # Adaptation
+                last_col = len(adaptation_output_df.columns) - 1
+                last_row = len(adaptation_output_df)
+            
+            # Apply conditional formatting to verification status column
+            col_letter = chr(65 + last_col)  # Convert to Excel column letter (A, B, C, etc.)
+            
+            # Formula-based conditional formatting (most reliable)
+            worksheet.conditional_format(f'{col_letter}2:{col_letter}{last_row + 1}', {
+                'type': 'formula',
+                'criteria': f'={col_letter}2="Unverified"',  # Exact match for Unverified
+                'format': unverified_format 
+            })
+
+            worksheet.conditional_format(f'{col_letter}2:{col_letter}{last_row + 1}', {
+                'type': 'formula', 
+                'criteria': f'=${col_letter}2="Verified"',   # Exact match for Verified
+                'format': verified_format 
+            })
+
+    logging.info(f"Saved combined results Excel with verification formatting to output folder")
 
 
 # Default provided - DEPRECARED
@@ -1120,8 +1277,10 @@ def generate_summary_insights(LLM, citations, classified_quotes, original_filena
     """Generate AI summary and insights based on extracted quotes"""
     try:
         # Prepare data for summary
-        total_quotes = sum(len(item.get('quotes', [])) for item in citations.values())
-        
+        verified_quotes = sum(len(item.get('quotes', [])) for item in citations.values())
+        unverified_quotes = sum(len(item.get('unverified_quotes', [])) for item in citations.values())
+        total_quotes = verified_quotes + unverified_quotes
+
         # Count classifications
         classification_counts = {
             'targets': 0,
@@ -1348,6 +1507,9 @@ def process_document(task_id, file_path, query_terms, filename, document_pages=N
         estimated_minutes (int): Pre-calculated estimated processing time
     """
     try:
+        # ✅ Store current task ID for debugging
+        processing_tasks['current_task_id'] = task_id
+
         # Clean up old results before starting new processing
         base_filename = os.path.splitext(filename)[0]
         cleanup_old_results(keep_base_filename=base_filename)
@@ -1718,6 +1880,56 @@ def results(task_id):
         citations = task.get("result", [])
         original_filename = task.get("original_filename", "analysis")
         
+        app.logger.info(f"[RESULTS {task_id}] Processing {len(citations)} citation sources")
+
+        # Process citations to ensure proper quote structure for template
+        processed_citations = {}
+        total_verified = 0
+        total_unverified = 0
+        for key, citation in citations.items():
+            processed_citation = citation.copy()
+
+            all_quotes = []
+            
+            # Ensure quotes have proper 3-element structure (index, text, verified)
+            if 'quotes' in processed_citation:
+                for quote_tuple in processed_citation['quotes']:
+                    if len(quote_tuple) >= 3:
+                        # Already has verification status
+                        all_quotes.append(quote_tuple)
+                        if quote_tuple[2]:
+                            total_verified += 1
+                        else:
+                            total_unverified += 1
+                    else:
+                        # Missing verification status, assume verified for backward compatibility
+                        all_quotes.append((quote_tuple[0], quote_tuple[1], True))
+                        total_verified += 1
+
+            # ✅ CRITICAL FIX: Process unverified_quotes if they exist separately
+            if 'unverified_quotes' in processed_citation:
+                app.logger.info(f"[RESULTS {task_id}] Found {len(processed_citation['unverified_quotes'])} separate unverified quotes for source {key}")
+                for quote_tuple in processed_citation['unverified_quotes']:
+                    if len(quote_tuple) >= 3:
+                        all_quotes.append(quote_tuple)
+                        if quote_tuple[2]:
+                            total_verified += 1
+                        else:
+                            total_unverified += 1
+                    else:
+                        # Assume unverified
+                        all_quotes.append((quote_tuple[0], quote_tuple[1], False))
+                        total_unverified += 1
+            
+            # Set the combined quotes
+            processed_citation['quotes'] = all_quotes
+            # Remove the separate unverified_quotes
+            processed_citation.pop('unverified_quotes', None)
+            
+            processed_citations[key] = processed_citation
+
+        app.logger.info(f"[RESULTS {task_id}] Final quote counts: {total_verified} verified, {total_unverified} unverified")
+        
         # Get runtime and token stats
         total_runtime_seconds = task.get("total_runtime_seconds", 0)
         total_tokens_used = task.get("total_tokens_used", 0)
@@ -1744,7 +1956,7 @@ def results(task_id):
 
         return render_template(
             'results.html',
-            citations=citations,
+            citations=processed_citations, # NEW: Use processed citations
             classification_data=classification_data, 
             summary_data=summary_data, # NEW
             results_folder='results',

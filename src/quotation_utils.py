@@ -10,6 +10,7 @@ QUOTE EXTRACTION MODULE
 import pprint
 import copy
 import time
+import logging
 
 from tqdm import tqdm
 from typing import List, Optional
@@ -312,16 +313,27 @@ def get_quotes(llm, doc_dict):
         try:
             quotes_dict[i]['quotes'] = []
             quotes_dict[i]['unverified_quotes'] = []
+            
+            # ✅ FIXED: Handle None response from extraction chain
+            if response is None or not hasattr(response, 'quotes') or response.quotes is None:
+                logging.warning(f"Quote extraction returned None for snippet {i}")
+                continue
+
             # quote verification - check if quote is in snippet --> avoid HALUSCINATION
             for q in response.quotes: # for dict --> replaced JSON with Pydantic chain as it is (50%) faster 
+                if q is None or not isinstance(q, str):  # ✅ Handle None quotes
+                    logging.warning(f"Skipping None quote in snippet {i}")
+                    continue
+
                 index = snippet.find(q)
                 if index != -1: # q found in snippet
-                    quotes_dict[i]['quotes'].append((index, q))
+                    quotes_dict[i]['quotes'].append((index, q, True)) # True = verified
                 else: # q NOT found in snippet
-                    quotes_dict[i]['unverified_quotes'].append((index, q))
+                    quotes_dict[i]['unverified_quotes'].append((index, q, False)) # False = unverified
                     
         except (KeyError, AttributeError):
             # no quotes in provided content
+            logging.warning(f"KeyError/AttributeError in snippet {i}: {e}")
             quotes_dict[i]['quotes'] = []
             quotes_dict[i]['unverified_quotes'] = []
         except Exception as e:
