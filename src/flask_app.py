@@ -54,12 +54,14 @@ import psutil
 try:
     from .quotation_utils import get_quotes
     from .classification_utils import tagging_classifier_quotes
-    from .general_utils import create_highlighted_pdf
+    from .general_utils import create_highlighted_pdf, _sanitize_for_json
 except ImportError:
     # Fallback for direct execution
     from quotation_utils import get_quotes
     from classification_utils import tagging_classifier_quotes
-    from general_utils import create_highlighted_pdf
+    from general_utils import create_highlighted_pdf, _sanitize_for_json
+
+LOCAL = False  # Set to True for local development
 
 # Initialize Flask application
 app = Flask(__name__)
@@ -88,8 +90,10 @@ processing_tasks = {}
 os.environ["LANGCHAIN_TRACING_V2"] = "false" # deactivate tracing for now, as api key is required to be updated to v2: "error":"Unauthorized: Using outdated v1 api key. Please use v2 api key."
 
 # Load environment variables from .env file - for local development
-#env_path = Path(__file__).resolve().parent.parent / '.env'
-#load_dotenv(dotenv_path=env_path)
+if LOCAL:
+    env_path = Path(__file__).resolve().parent.parent / '.env'
+    load_dotenv(dotenv_path=env_path)
+    logging.info(f"Loaded environment variables from {env_path}")
 
 # Azure OpenAI Setup 
 LLM = AzureChatOpenAI(
@@ -1613,8 +1617,8 @@ def process_document(task_id, file_path, query_terms, filename, document_pages=N
             tokens_used = cb.total_tokens
             total_tokens_used += tokens_used  # Update total tokens used
         app.logger.info(f"[TASK {task_id}] Quote classification completed successfully")
-        
-        processing_tasks[task_id]["partial_results"]["classified_quotes"] = classified.to_dict('records')
+
+        processing_tasks[task_id]["partial_results"]["classified_quotes"] = _sanitize_for_json(classified.to_dict('records'))
         processing_tasks[task_id]["partial_results"]["classification_complete"] = True
         processing_tasks[task_id]["progress"] = 80
         processing_tasks[task_id]["status"] = "AI classification completed."
@@ -1942,6 +1946,9 @@ def results(task_id):
             # Create lookup dictionary for quick access
             for item in classified_quotes:
                 classification_data[item.get('quote', '')] = item
+        
+        # ✅ CRITICAL: Sanitize before passing to template
+        classification_data = _sanitize_for_json(classification_data)
 
         # Get summary data
         summary_data = task.get("summary", {})
@@ -1954,14 +1961,18 @@ def results(task_id):
         else:
             runtime_display = f"{total_runtime_seconds:.1f} seconds"
 
+        # Get document pages from task
+        document_pages = task.get("document_pages", "N/A")
+
         return render_template(
             'results.html',
             citations=processed_citations, # NEW: Use processed citations
-            classification_data=classification_data, 
+            classification_data=classification_data, # Now sanitized
             summary_data=summary_data, # NEW
             results_folder='results',
             task_id=task_id,
             original_filename=original_filename,
+            document_pages=document_pages,
             total_runtime=runtime_display,           
             total_tokens=total_tokens_used,          
             runtime_seconds=total_runtime_seconds    
@@ -2191,23 +2202,27 @@ def get_partial_results(task_id):
         task = processing_tasks[task_id]
         partial_results = task.get("partial_results", {})
         
+        # ✅ CRITICAL FIX: Sanitize before returning JSON
+        safe_partial = _sanitize_for_json(partial_results)
+        
         return jsonify({
             "task_id": task_id,
             "progress": task.get("progress", 0),
             "status": task.get("status", "Processing..."),
-            "text_partitions": partial_results.get("text_partitions", []),
-            "total_partitions": partial_results.get("total_partitions", 0),
-            "text_extraction_complete": partial_results.get("text_extraction_complete", False),
-            "search_results": partial_results.get("search_results", []),
-            "total_search_results": partial_results.get("total_search_results", 0),
-            "semantic_search_complete": partial_results.get("semantic_search_complete", False),
-            "extracted_quotes": partial_results.get("extracted_quotes", {}),
-            "quote_extraction_complete": partial_results.get("quote_extraction_complete", False),
-            "classified_quotes": partial_results.get("classified_quotes", []),
-            "classification_complete": partial_results.get("classification_complete", False),
+            "text_partitions": safe_partial.get("text_partitions", []),
+            "total_partitions": safe_partial.get("total_partitions", 0),
+            "text_extraction_complete": safe_partial.get("text_extraction_complete", False),
+            "search_results": safe_partial.get("search_results", []),
+            "total_search_results": safe_partial.get("total_search_results", 0),
+            "semantic_search_complete": safe_partial.get("semantic_search_complete", False),
+            "extracted_quotes": safe_partial.get("extracted_quotes", {}),
+            "quote_extraction_complete": safe_partial.get("quote_extraction_complete", False),
+            "classified_quotes": safe_partial.get("classified_quotes", []),
+            "classification_complete": safe_partial.get("classification_complete", False),
             "original_filename": task.get("original_filename", "Unknown")
         })
     except Exception as e:
+        app.logger.error(f"[PARTIAL-RESULTS] Error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/partitions/<task_id>')

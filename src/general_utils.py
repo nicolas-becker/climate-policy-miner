@@ -8,6 +8,7 @@ General Utils
 """
 import os
 import re
+import math
 import fitz #PyMuPDF
 import requests
 import urllib.parse
@@ -16,6 +17,25 @@ import logging
 import unicodedata
 import numpy as np
 import json
+
+def _sanitize_for_json(obj):
+    """Recursively replace NaN/Inf with None so JSON is valid."""
+    if isinstance(obj, (float, np.floating)):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize_for_json(v) for v in obj]
+    if isinstance(obj, pd.DataFrame):
+        # Replace NaN/Inf with None before converting to dict
+        df = obj.replace([np.nan, np.inf, -np.inf], None)
+        return _sanitize_for_json(df.to_dict('records'))
+    if isinstance(obj, pd.Series):
+        s = obj.replace([np.nan, np.inf, -np.inf], None)
+        return _sanitize_for_json(s.tolist())
+    return obj
 
 # Load configuration
 def load_config(config_file):

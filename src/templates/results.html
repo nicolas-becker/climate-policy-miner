@@ -161,17 +161,22 @@
   <div class="container py-5">
     <h1 class="mb-2 text-center">🔍 Extracted Content & Quotes</h1>
     <p class="document-name text-center">Document: <strong>{{ original_filename }}</strong></p>
+    <p class="text-center text-muted small mb-4">Task ID: <code>{{ task_id }}</code></p>
     
     {% if total_runtime and total_tokens %}
     <div class="text-center mb-4">
       <div class="card mx-auto" style="max-width: 500px;">
         <div class="card-body py-2">
           <div class="row">
-            <div class="col-6">
+            <div class="col-4">
+              <small class="text-muted">Document Pages:</small><br>
+              <strong class="text-info">{{ document_pages if document_pages else 'N/A' }}</strong>
+            </div>
+            <div class="col-4">
               <small class="text-muted">Processing Time:</small><br>
               <strong class="text-primary">{{ total_runtime }}</strong>
             </div>
-            <div class="col-6">
+            <div class="col-4">
               <small class="text-muted">AI Tokens Used:</small><br>
               <strong class="text-success">{{ total_tokens }}</strong>
             </div>
@@ -331,6 +336,102 @@
     </div>
     {% endif %}
 
+    <!-- ✅ Hidden element to safely pass JSON data to JavaScript -->
+    {% if classification_data %}
+    <script type="application/json" id="classification-data">{{ classification_data | tojson | safe }}</script>
+    {% endif %}
+
+    <!-- ✅ NEW: Embedded Excel Preview Section -->
+    <div class="card mb-5 shadow-sm">
+        <div class="card-header bg-success text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">📊 Results Spreadsheet Preview</h4>
+                  <a href="{{ url_for('download_results', task_id=task_id, filename=original_filename) }}"  
+                  class="btn btn-light btn-sm">
+                    <i class="fas fa-download me-1"></i>
+                    Download Full Results
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-12">
+                    <p class="mb-2">
+                        <strong>📋 Spreadsheet Contents:</strong> This preview shows your complete analysis results 
+                        organized in separate sheets for easy review.
+                    </p>
+                    
+                    <!-- Sheet tabs simulation -->
+                    <ul class="nav nav-pills mb-3" id="excel-tabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="targets-tab" data-bs-toggle="pill" 
+                                    data-bs-target="#targets-content" type="button" role="tab">
+                                🎯 Targets
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="mitigation-tab" data-bs-toggle="pill" 
+                                    data-bs-target="#mitigation-content" type="button" role="tab">
+                                🛡️ Mitigation
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="adaptation-tab" data-bs-toggle="pill" 
+                                    data-bs-target="#adaptation-content" type="button" role="tab">
+                                🌿 Adaptation
+                            </button>
+                        </li>
+                    </ul>
+
+                    <!-- Tab content -->
+                    <div class="tab-content" id="excel-content">
+                        <!-- Targets Sheet -->
+                        <div class="tab-pane fade show active" id="targets-content" role="tabpanel">
+                            <div class="excel-preview">
+                                <div id="targets-table-container">
+                                    <p class="text-muted">
+                                        <i class="fas fa-spinner fa-spin me-2"></i>
+                                        Loading targets data...
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Mitigation Sheet -->
+                        <div class="tab-pane fade" id="mitigation-content" role="tabpanel">
+                            <div class="excel-preview">
+                                <div id="mitigation-table-container">
+                                    <p class="text-muted">
+                                        <i class="fas fa-spinner fa-spin me-2"></i>
+                                        Loading mitigation data...
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Adaptation Sheet -->
+                        <div class="tab-pane fade" id="adaptation-content" role="tabpanel">
+                            <div class="excel-preview">
+                                <div id="adaptation-table-container">
+                                    <p class="text-muted">
+                                        <i class="fas fa-spinner fa-spin me-2"></i>
+                                        Loading adaptation data...
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info mt-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Note:</strong> This is a preview of your results. Download the complete Excel file 
+                        for full functionality including sorting, filtering, and conditional formatting.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {% if citations %}
       <!-- Main Citations Accordion -->
       <div class="accordion mb-5" id="citationsAccordion">
@@ -438,102 +539,6 @@
     {% else %}
       <div class="alert alert-warning">No citations found.</div>
     {% endif %}
-
-    <!-- ✅ Hidden element to safely pass JSON data to JavaScript -->
-    {% if classification_data %}
-    <script type="application/json" id="classification-data">{{ classification_data | tojson | safe }}</script>
-    {% endif %}
-
-    <!-- ✅ NEW: Embedded Excel Preview Section -->
-    <div class="card mb-5 shadow-sm">
-        <div class="card-header bg-success text-white">
-            <div class="d-flex justify-content-between align-items-center">
-                <h4 class="mb-0">📊 Results Spreadsheet Preview</h4>
-                  <a href="{{ url_for('download_results', task_id=task_id, filename=original_filename) }}"  
-                  class="btn btn-light btn-sm">
-                    <i class="fas fa-download me-1"></i>
-                    Download Full Results
-                </a>
-            </div>
-        </div>
-        <div class="card-body">
-            <div class="row mb-3">
-                <div class="col-md-12">
-                    <p class="mb-2">
-                        <strong>📋 Spreadsheet Contents:</strong> This preview shows your complete analysis results 
-                        organized in separate sheets for easy review.
-                    </p>
-                    
-                    <!-- Sheet tabs simulation -->
-                    <ul class="nav nav-pills mb-3" id="excel-tabs" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="targets-tab" data-bs-toggle="pill" 
-                                    data-bs-target="#targets-content" type="button" role="tab">
-                                🎯 Targets
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="mitigation-tab" data-bs-toggle="pill" 
-                                    data-bs-target="#mitigation-content" type="button" role="tab">
-                                🛡️ Mitigation
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="adaptation-tab" data-bs-toggle="pill" 
-                                    data-bs-target="#adaptation-content" type="button" role="tab">
-                                🌿 Adaptation
-                            </button>
-                        </li>
-                    </ul>
-
-                    <!-- Tab content -->
-                    <div class="tab-content" id="excel-content">
-                        <!-- Targets Sheet -->
-                        <div class="tab-pane fade show active" id="targets-content" role="tabpanel">
-                            <div class="excel-preview">
-                                <div id="targets-table-container">
-                                    <p class="text-muted">
-                                        <i class="fas fa-spinner fa-spin me-2"></i>
-                                        Loading targets data...
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Mitigation Sheet -->
-                        <div class="tab-pane fade" id="mitigation-content" role="tabpanel">
-                            <div class="excel-preview">
-                                <div id="mitigation-table-container">
-                                    <p class="text-muted">
-                                        <i class="fas fa-spinner fa-spin me-2"></i>
-                                        Loading mitigation data...
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Adaptation Sheet -->
-                        <div class="tab-pane fade" id="adaptation-content" role="tabpanel">
-                            <div class="excel-preview">
-                                <div id="adaptation-table-container">
-                                    <p class="text-muted">
-                                        <i class="fas fa-spinner fa-spin me-2"></i>
-                                        Loading adaptation data...
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="alert alert-info mt-3">
-                        <i class="fas fa-info-circle me-2"></i>
-                        <strong>Note:</strong> This is a preview of your results. Download the complete Excel file 
-                        for full functionality including sorting, filtering, and conditional formatting.
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <div class="mt-4 d-flex justify-content-between">
       <a href="{{ url_for('index') }}" onclick="releaseQueueSlot('{{ task_id }}')" class="btn btn-secondary">🔄 Analyze Another Document</a>
