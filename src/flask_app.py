@@ -1069,55 +1069,91 @@ def postprocess_results(file_directory, output_df, filename, summary_data=None):
             f.write("No summary data available.\n")
         logging.info(f"No summary data provided; created empty summary file at: {summary_txt_path}")
 
-    #  save to single Excel file
-    #  create an Excel writer object
-    with pd.ExcelWriter(os.path.join(output_folder, f"{os.path.splitext(os.path.basename(filename))[0]}_results.xlsx")) as writer:
+    # ✅ CORRECTED: Save to Excel with conditional formatting
+    excel_path = os.path.join(output_folder, f"{os.path.splitext(os.path.basename(filename))[0]}_results.xlsx")
     
-        # use to_excel function and specify the sheet_name and index 
-        # to store the dataframe in specified sheet
-        targets_output_df.to_excel(writer, sheet_name="Targets", index=False)
-        mitigation_output_df.to_excel(writer, sheet_name="Mitigation", index=False)
-        adaptation_output_df.to_excel(writer, sheet_name="Adaptation", index=False)
+    try:
+        # Create Excel writer with xlsxwriter engine
+        with pd.ExcelWriter(excel_path, engine='xlsxwriter') as writer:
+            # Write dataframes to sheets
+            targets_output_df.to_excel(writer, sheet_name="Targets", index=False)
+            mitigation_output_df.to_excel(writer, sheet_name="Mitigation", index=False)
+            adaptation_output_df.to_excel(writer, sheet_name="Adaptation", index=False)
 
-        # ✅ NEW: Add conditional formatting for verification status
-        workbook = writer.book
-        
-        # Define formats for verification status
-        verified_format = workbook.add_format({'bg_color': '#d4edda', 'font_color': '#155724'})
-        unverified_format = workbook.add_format({'bg_color': '#f8d7da', 'font_color': '#721c24'})
-        
-        # Apply formatting to each sheet
-        for sheet_name in ["Targets", "Mitigation", "Adaptation"]:
-            worksheet = writer.sheets[sheet_name]
+            # ✅ FIXED: Access workbook AFTER writing data
+            workbook = writer.book
             
-            # Find the verification status column (should be the last column)
-            if sheet_name == "Targets":
-                last_col = len(targets_output_df.columns) - 1
-                last_row = len(targets_output_df)
-            elif sheet_name == "Mitigation":
-                last_col = len(mitigation_output_df.columns) - 1
-                last_row = len(mitigation_output_df)
-            else:  # Adaptation
-                last_col = len(adaptation_output_df.columns) - 1
-                last_row = len(adaptation_output_df)
-            
-            # Apply conditional formatting to verification status column
-            col_letter = chr(65 + last_col)  # Convert to Excel column letter (A, B, C, etc.)
-            
-            # Formula-based conditional formatting (most reliable)
-            worksheet.conditional_format(f'{col_letter}2:{col_letter}{last_row + 1}', {
-                'type': 'formula',
-                'criteria': f'={col_letter}2="Unverified"',  # Exact match for Unverified
-                'format': unverified_format 
+            # Define formats for verification status
+            verified_format = workbook.add_format({
+                'bg_color': '#d4edda',
+                'font_color': '#155724',
+                'bold': True
             })
-
-            worksheet.conditional_format(f'{col_letter}2:{col_letter}{last_row + 1}', {
-                'type': 'formula', 
-                'criteria': f'=${col_letter}2="Verified"',   # Exact match for Verified
-                'format': verified_format 
+            
+            unverified_format = workbook.add_format({
+                'bg_color': '#f8d7da',
+                'font_color': '#721c24',
+                'bold': True
             })
+            
+            # Apply formatting to each sheet
+            sheet_configs = [
+                ('Targets', targets_output_df, writer.sheets['Targets']),
+                ('Mitigation', mitigation_output_df, writer.sheets['Mitigation']),
+                ('Adaptation', adaptation_output_df, writer.sheets['Adaptation'])
+            ]
+            
+            for sheet_name, df, worksheet in sheet_configs:
+                if len(df) == 0:
+                    continue
+                    
+                # Find verification status column (should be last)
+                col_idx = len(df.columns) - 1
+                col_letter = chr(65 + col_idx)  # A, B, C, etc.
+                last_row = len(df) + 1  # +1 for header
+                
+                # Apply conditional formatting for "Unverified" (red)
+                worksheet.conditional_format(f'{col_letter}2:{col_letter}{last_row}', {
+                    'type': 'text',
+                    'criteria': 'containing',
+                    'value': 'Unverified',
+                    'format': unverified_format
+                })
+                
+                # Apply conditional formatting for "Verified" (green)
+                worksheet.conditional_format(f'{col_letter}2:{col_letter}{last_row}', {
+                    'type': 'text',
+                    'criteria': 'containing',
+                    'value': 'Verified',
+                    'format': verified_format
+                })
+                
+                # Auto-adjust column widths
+                for i, col in enumerate(df.columns):
+                    max_len = max(
+                        df[col].astype(str).apply(len).max(),
+                        len(str(col))
+                    ) + 2
+                    worksheet.set_column(i, i, min(max_len, 50))  # Cap at 50
+        
+        logging.info(f"Excel file with formatting saved: {excel_path}")
+        
+    except Exception as e:
+        logging.error(f"Error creating Excel with formatting: {e}")
+        logging.error(f"Traceback: {traceback.format_exc()}")
+        
+        # Fallback: Save without formatting
+        try:
+            with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+                targets_output_df.to_excel(writer, sheet_name="Targets", index=False)
+                mitigation_output_df.to_excel(writer, sheet_name="Mitigation", index=False)
+                adaptation_output_df.to_excel(writer, sheet_name="Adaptation", index=False)
+            logging.info(f"Excel saved without conditional formatting (fallback)")
+        except Exception as fallback_error:
+            logging.error(f"Fallback Excel save also failed: {fallback_error}")
+            raise
 
-    logging.info(f"Saved combined results Excel with verification formatting to output folder")
+    logging.info(f"Post-processing completed for: {filename}")
 
 
 # Default provided - DEPRECARED
