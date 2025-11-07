@@ -502,18 +502,26 @@
                             {% endif %}
 
                             <!-- Add classification badges if available -->
-                            {% if classification_data and classification_data.get(quote_text) %}
+                            {% if classification_data %}
                               <div class="quote-classification mt-2">
-                                {% set class_info = classification_data[quote_text] %}
-                                {% if class_info.target == 'True' %}
-                                  <span class="badge badge-target me-1">🎯 Target</span>
-                                {% endif %}
-                                {% if class_info.mitigation_measure == 'True' %}
-                                  <span class="badge badge-mitigation me-1">🛡️ Mitigation</span>
-                                {% endif %}
-                                {% if class_info.adaptation_measure == 'True' %}
-                                  <span class="badge badge-adaptation me-1">🌿 Adaptation</span>
-                                {% endif %}
+                                {% for class_item in classification_data %}
+                                  {% if class_item.quote == quote_text %}
+                                    {% if class_item.target == 'True' %}
+                                      <span class="badge badge-target me-1">🎯 Target</span>
+                                    {% endif %}
+                                    {% if class_item.mitigation_measure == 'True' %}
+                                      <span class="badge badge-mitigation me-1">
+                                        🛡️ Mitigation
+                                        {% if class_item.instrument %}
+                                          ({{ class_item.instrument }})
+                                        {% endif %}
+                                      </span>
+                                    {% endif %}
+                                    {% if class_item.adaptation_measure == 'True' %}
+                                      <span class="badge badge-adaptation me-1">🌿 Adaptation</span>
+                                    {% endif %}
+                                  {% endif %}
+                                {% endfor %}
                               </div>
                             {% endif %}
                           </div>
@@ -670,20 +678,20 @@
       }
 
       // FIXED: Safe JSON parsing with error handling
-      let classificationData = {};
+      let classificationData = [];
       try {
           // Get the classification data from the template
           const classificationDataElement = document.getElementById('classification-data');
           if (classificationDataElement) {
               classificationData = JSON.parse(classificationDataElement.textContent);
-              console.log('Classification data loaded:', Object.keys(classificationData).length, 'items');
+              console.log('Classification data loaded:', classificationData.length, 'rows (may include duplicates with different instruments)');
           } else {
               console.log('No classification data element found or empty');
-              classificationData = {};
+              classificationData = [];
           }
       } catch (error) {
           console.error('Error loading classification data:', error);
-          classificationData = {};
+          classificationData = [];
       }
       
       // Prepare data for each sheet
@@ -691,15 +699,16 @@
       const mitigationData = [];
       const adaptationData = [];
 
-      // Process classification data
-      if (classificationData && typeof classificationData === 'object') {
-          Object.values(classificationData).forEach(item => {
+      // ✅ FIXED: Process EACH row independently (no more overwriting!)
+      if (Array.isArray(classificationData)) {
+          classificationData.forEach(item => {
               const baseItem = {
                   quote: item.quote || '',
                   page: item.page || '',
                   verification_status: item.verification_status || 'Verified'
               };
 
+              // Targets
               if (item.target === 'True') {
                   targetsData.push({
                       ...baseItem,
@@ -712,16 +721,18 @@
                   });
               }
 
+              // ✅ Mitigation - Each instrument classification becomes a separate row
               if (item.mitigation_measure === 'True') {
                   mitigationData.push({
                       ...baseItem,
                       category: item.category || '',
                       purpose: item.purpose || '',
-                      instrument: item.instrument || '',
+                      instrument: item.instrument || '',  // ✅ Now each row has ONE instrument
                       asi: item.asi || ''
                   });
               }
 
+              // ✅ Adaptation - Same logic
               if (item.adaptation_measure === 'True') {
                   adaptationData.push({
                       ...baseItem,
@@ -735,9 +746,17 @@
       console.log('Data prepared:', {
           targets: targetsData.length,
           mitigation: mitigationData.length,
-          adaptation: adaptationData.length
-
+          adaptation: adaptationData.length,
+          total_rows: classificationData.length
       });
+
+      // ✅ Enhanced logging for multi-instrument detection
+      const totalClassifications = targetsData.length + mitigationData.length + adaptationData.length;
+      const uniqueQuotes = new Set(classificationData.map(d => d.quote)).size;
+      const multiInstrumentCount = classificationData.length - uniqueQuotes;
+      if (multiInstrumentCount > 0) {
+          console.log(`✓ Multi-instrument quotes correctly displayed: ${multiInstrumentCount} additional rows for quotes with multiple classifications`);
+      }
 
       // Define column configurations
       const targetsColumns = [
@@ -788,6 +807,12 @@
           }
 
           console.log('Excel preview loaded successfully');
+
+          // ✅ Show duplicate info in console
+          if (totalClassifications > uniqueQuotes) {
+              console.log(`✓ Multi-category quotes correctly displayed: ${totalClassifications - uniqueQuotes} quotes appear in multiple sheets`);
+          }
+
       } catch (error) {
           console.error('Error creating tables:', error);
           

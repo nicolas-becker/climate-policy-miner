@@ -1975,16 +1975,17 @@ def results(task_id):
         total_tokens_used = task.get("total_tokens_used", 0)
         
         # Get classification data if available
-        classification_data = {}
+        #classification_data = {} # OLD - replaced with list
         classified_quotes = []
         if "classified_quotes" in task.get("partial_results", {}):
             classified_quotes = task["partial_results"]["classified_quotes"]
             # Create lookup dictionary for quick access
-            for item in classified_quotes:
-                classification_data[item.get('quote', '')] = item
+            #for item in classified_quotes:
+            #    classification_data[item.get('quote', '')] = item
         
         # ✅ CRITICAL: Sanitize before passing to template
-        classification_data = _sanitize_for_json(classification_data)
+        #classification_data = _sanitize_for_json(classification_data) #OLD
+        classified_quotes = _sanitize_for_json(classified_quotes)
 
         # Get summary data
         summary_data = task.get("summary", {})
@@ -2003,7 +2004,7 @@ def results(task_id):
         return render_template(
             'results.html',
             citations=processed_citations, # NEW: Use processed citations
-            classification_data=classification_data, # Now sanitized
+            classification_data=classified_quotes, # Now sanitized
             summary_data=summary_data, # NEW
             results_folder='results',
             task_id=task_id,
