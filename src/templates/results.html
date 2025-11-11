@@ -155,6 +155,79 @@
         background-color: #198754;
         border-color: #198754;
     }
+    .excel-table td {
+        font-size: 0.85em;
+        max-width: 300px;
+        word-wrap: break-word;
+        position: relative; /* ✅ Enable absolute positioning for button */
+        padding-right: 35px !important; /* ✅ Make room for copy button */
+    }
+    .cell-copy-btn {
+        position: absolute;
+        right: 5px;
+        top: 50%;
+        transform: translateY(-50%);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        padding: 2px 6px;
+        font-size: 0.75em;
+        background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+        border: none;
+        color: white;
+        border-radius: 3px;
+        cursor: pointer;
+        z-index: 5;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .cell-copy-btn:hover {
+        background: linear-gradient(135deg, #157347 0%, #1ab386 100%);
+        transform: translateY(-50%) scale(1.05);
+    }
+    .excel-table td:hover .cell-copy-btn {
+        opacity: 1;
+    }
+    /* Copy notification toast */
+    .copy-toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 9999;
+        animation: slideIn 0.3s ease, slideOut 0.3s ease 2.7s;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    @keyframes slideIn {
+        from {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(400px);
+            opacity: 0;
+        }
+    }
+
+    .copy-toast i {
+        font-size: 1.2em;
+    }
   </style>
 </head>
 <body class="bg-light">
@@ -634,6 +707,65 @@
   // Excel sheet preview
   document.addEventListener('DOMContentLoaded', function() {
       console.log('Initializing Excel preview...');
+    
+      // NEW: Copy to clipboard function
+      function copyToClipboard(text, event) {
+          // Use modern Clipboard API
+          navigator.clipboard.writeText(text).then(() => {
+              showCopyNotification();
+              
+              // Visual feedback on button
+              const btn = event.target;
+              const originalHTML = btn.innerHTML;
+              btn.innerHTML = '<i class="fas fa-check"></i>';
+              btn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+              
+              setTimeout(() => {
+                  btn.innerHTML = originalHTML;
+                  btn.style.background = '';
+              }, 1000);
+              
+          }).catch(err => {
+              console.error('Copy failed:', err);
+              // Fallback for older browsers
+              fallbackCopy(text);
+          });
+      }
+
+      // Fallback copy method for older browsers
+      function fallbackCopy(text) {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          
+          try {
+              document.execCommand('copy');
+              showCopyNotification();
+          } catch (err) {
+              console.error('Fallback copy failed:', err);
+              alert('Copy failed. Please copy manually.');
+          }
+          
+          document.body.removeChild(textarea);
+      }
+
+      // Show copy notification toast
+      function showCopyNotification() {
+          const toast = document.createElement('div');
+          toast.className = 'copy-toast';
+          toast.innerHTML = `
+              <i class="fas fa-check-circle"></i>
+              <span><strong>Copied!</strong> Cell content copied to clipboard</span>
+          `;
+          document.body.appendChild(toast);
+          
+          setTimeout(() => {
+              toast.remove();
+          }, 3000);
+      }
 
       // Function to create table HTML from data
       function createTable(data, columns, tableId) {
@@ -664,11 +796,20 @@
                   if (col.field === 'verification_status') {
                       cellClass = cellContent === 'Verified' ? 'verification-verified' : 'verification-unverified';
                   }
+
+                  // Store original content BEFORE escaping HTML
+                  const originalContent = String(cellContent);
                   
                   // Escape HTML to prevent issues
                   cellContent = String(cellContent).replace(/</g, '&lt;').replace(/>/g, '&gt;');
                   
-                  html += `<td class="${cellClass}">${cellContent}</td>`;
+                  // Add copy button to each cell
+                  html += `<td class="${cellClass}" data-copy-text="${originalContent.replace(/"/g, '&quot;')}">
+                      ${cellContent}
+                      <button class="cell-copy-btn" onclick="copyCellContent(event)" title="Copy cell content">
+                          <i class="fas fa-copy"></i>
+                      </button>
+                  </td>`;
               });
               html += '</tr>';
           });
@@ -677,7 +818,15 @@
           return html;
       }
 
-      // FIXED: Safe JSON parsing with error handling
+      // Make copy function globally accessible
+      window.copyCellContent = function(event) {
+          event.stopPropagation(); // Prevent row selection if you add that later
+          const cell = event.target.closest('td');
+          const textToCopy = cell.getAttribute('data-copy-text');
+          copyToClipboard(textToCopy, event);
+      };
+
+      // Safe JSON parsing with error handling
       let classificationData = [];
       try {
           // Get the classification data from the template
@@ -699,7 +848,7 @@
       const mitigationData = [];
       const adaptationData = [];
 
-      // ✅ FIXED: Process EACH row independently (no more overwriting!)
+      // Process EACH row independently (no overwriting)
       if (Array.isArray(classificationData)) {
           classificationData.forEach(item => {
               const baseItem = {
@@ -721,18 +870,18 @@
                   });
               }
 
-              // ✅ Mitigation - Each instrument classification becomes a separate row
+              // Mitigation - Each instrument classification becomes a separate row
               if (item.mitigation_measure === 'True') {
                   mitigationData.push({
                       ...baseItem,
                       category: item.category || '',
                       purpose: item.purpose || '',
-                      instrument: item.instrument || '',  // ✅ Now each row has ONE instrument
+                      instrument: item.instrument || '',  // each row has ONE instrument
                       asi: item.asi || ''
                   });
               }
 
-              // ✅ Adaptation - Same logic
+              // Adaptation - Same logic
               if (item.adaptation_measure === 'True') {
                   adaptationData.push({
                       ...baseItem,
@@ -750,7 +899,7 @@
           total_rows: classificationData.length
       });
 
-      // ✅ Enhanced logging for multi-instrument detection
+      // Enhanced logging for multi-instrument detection
       const totalClassifications = targetsData.length + mitigationData.length + adaptationData.length;
       const uniqueQuotes = new Set(classificationData.map(d => d.quote)).size;
       const multiInstrumentCount = classificationData.length - uniqueQuotes;
@@ -808,7 +957,7 @@
 
           console.log('Excel preview loaded successfully');
 
-          // ✅ Show duplicate info in console
+          // Show duplicate info in console
           if (totalClassifications > uniqueQuotes) {
               console.log(`✓ Multi-category quotes correctly displayed: ${totalClassifications - uniqueQuotes} quotes appear in multiple sheets`);
           }
