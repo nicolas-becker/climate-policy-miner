@@ -67,18 +67,19 @@ LOCAL = False  # Set to True for local development
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = tempfile.gettempdir() # Temporary folder for file uploads
 
-# Set up logging
-log_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'logs')
-os.makedirs(log_folder, exist_ok=True)  # Ensure the logs folder exists
-log_file = os.path.join(log_folder, 'app.log')
+# Set up logging - GLOBAL app log (for startup, errors, etc.)
+global_log_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'app_logs')
+os.makedirs(global_log_folder, exist_ok=True)
+global_log_file = os.path.join(global_log_folder, 'app.log')
 
 logging.basicConfig(
-    filename=log_file,
+    filename=global_log_file,
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 logging.info("============ App started ============")
+logging.info(f"Global log file: {global_log_file}")
 
 # Store for tracking processing tasks
 processing_tasks = {}
@@ -124,110 +125,47 @@ TAXONOMY = ["Transport",
             "Measure"
             ]
 
-'''Queue
-# Queue management
-processing_queue = queue.Queue(maxsize=5)  # Max 5 users in queue
-current_processing = {"task_id": None, "status": "idle"}
-
-def queue_processor():
-    """Process documents one at a time. Keep queue slot until user is done"""
-    thread_name = threading.current_thread().name
-    logging.info(f"Queue processor thread '{thread_name}' started successfully")
-
-    while True:
-        task = None
-        try:
-            task = processing_queue.get(timeout=60)
-            if task is None:
-                logging.info(f"Queue processor received stop signal")
-                break
-            
-            logging.info(f"Processing task: {task['task_id']} (Queue size: {processing_queue.qsize()})")
-
-            current_processing["task_id"] = task["task_id"]
-            current_processing["status"] = "processing"
-            
-            # Process with task-specific outputs
-            process_document(
-                task["task_id"], 
-                task["file_path"], 
-                task["query_terms"], 
-                task["filename"],
-                task.get("document_pages"),
-                task.get("estimated_minutes")
-            )
-            
-            logging.info(f"Completed task: {task['task_id']}")
-
-        except queue.Empty:
-            continue
-        except Exception as e:
-            logging.error(f"Queue processor error: {e}")
-            if task:
-                processing_tasks[task["task_id"]]["status"] = "error"
-                processing_tasks[task["task_id"]]["error"] = str(e)
-                processing_queue.task_done()
-        finally:
-            current_processing["task_id"] = None
-            current_processing["status"] = "idle"
-            
-    logging.warning(f"Queue processor thread '{thread_name}' has ended")
-
-def release_queue_slot(task_id):
-    """Release queue slot for a specific task"""
-    try:
-        if task_id in processing_tasks:
-            task = processing_tasks[task_id]
-            if task.get("progress", 0) >= 100 or task.get("error"):
-                processing_queue.task_done()
-                logging.info(f"Queue slot released for task {task_id}")
-                
-                # Clean up task data after some time
-                del processing_tasks[task_id]
-                return True
-    except Exception as e:
-        logging.error(f"Error releasing queue slot: {e}")
-    return False
-
-# Start queue processor
-def start_queue_processor_safely():
-    """Start queue processor with error handling and restart capability"""
-    global queue_thread
+def get_task_results_folder(task_id):
+    """
+    Get the results folder path for a specific task.
     
+    Args:
+        task_id (str): Unique task identifier
+        
+    Returns:
+        str: Path to task-specific results folder
+    """
+    return os.path.join(app.config['UPLOAD_FOLDER'], f'results_{task_id}')
+
+def cleanup_old_task_results(age_hours=24):
+    """
+    Clean up task results older than specified hours.
+    
+    Args:
+        age_hours (int): Age in hours after which results are deleted
+    """
     try:
-        logging.info("Starting queue processor thread")
+        results_base = app.config['UPLOAD_FOLDER']
+        current_time = time.time()
+        age_seconds = age_hours * 3600
+        cleaned_count = 0
         
-        # Check if thread is already running
-        if 'queue_thread' in globals() and queue_thread.is_alive():
-            logging.info("Queue processor already running")
-            return True
+        for folder_name in os.listdir(results_base):
+            if folder_name.startswith('results_'):
+                folder_path = os.path.join(results_base, folder_name)
+                if os.path.isdir(folder_path):
+                    folder_age = current_time - os.path.getctime(folder_path)
+                    if folder_age > age_seconds:
+                        logging.info(f"Cleaning up old results: {folder_name} (age: {folder_age/3600:.1f} hours)")
+                        import shutil
+                        shutil.rmtree(folder_path)
+                        cleaned_count += 1
         
-        # Start new thread
-        queue_thread = threading.Thread(target=queue_processor, daemon=True, name="QueueProcessor")
-        queue_thread.start()
-        
-        # Verify it started
-        time.sleep(0.1)  # Give it a moment to start
-        if queue_thread.is_alive():
-            logging.info("Queue processor thread started successfully")
-            return True
-        else:
-            logging.error("Queue processor thread failed to start")
-            return False
-            
+        if cleaned_count > 0:
+            logging.info(f"Cleanup completed: {cleaned_count} old result folders removed")
+                        
     except Exception as e:
-        logging.error(f"Error starting queue processor: {e}")
-        return False
-
-# Replace the simple thread start with the safe version:
-# OLD: 
-# queue_thread = threading.Thread(target=queue_processor, daemon=True)
-# queue_thread.start()
-
-# NEW:
-#if not start_queue_processor_safely():
-#    logging.critical("Failed to start queue processor on app startup!")
-'''
+        logging.error(f"Cleanup error: {e}")
 
 def download_pdf_from_url(url, save_dir):
     """
@@ -484,13 +422,14 @@ def apply_general_cleaning(text):
     return text
 
 # Update the existing extract_text_with_unstructured function (around line 234)
-def extract_text_with_unstructured(pdf_path, min_lenght=10, max_length=10000, apply_cleaning=True):
+def extract_text_with_unstructured(pdf_path, task_id, min_lenght=10, max_length=10000, apply_cleaning=True):
     """
     Extracts text and metadata from a PDF file using the `partition_pdf` function.
-    Now includes general text cleaning using clean_elements().
+    Now includes general text cleaning using clean_elements() and task-specific storage.
 
     Args:
         pdf_path (str): The file path to the PDF document to be processed.
+        task_id (str): Unique task identifier for folder structure
         min_lenght (int): The minimum length of elements, up to which they are always chunked, to reduce processing time.
         max_length (int): The maximum length of chunks to be extracted from each element. Larger chunks are split into smaller ones.
         apply_cleaning (bool): Whether to apply text cleaning functions. Default: True.
@@ -532,7 +471,7 @@ def extract_text_with_unstructured(pdf_path, min_lenght=10, max_length=10000, ap
         content = clean_elements(elements, apply_cleaning=apply_cleaning)
         
         # Save content as JSON in the by-products folder
-        by_products_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'by-products')
+        by_products_folder = os.path.join(get_task_results_folder(task_id), 'by-products')
         os.makedirs(by_products_folder, exist_ok=True)
         
         # Fix the duplicate path issue and add cleaning suffix
@@ -552,7 +491,7 @@ def extract_text_with_unstructured(pdf_path, min_lenght=10, max_length=10000, ap
         logging.error(f"Traceback: {traceback.format_exc()}")
         raise
 
-def semantic_search_FAISS(text_chunks, queries, filename, embedding_model, sim_threshold=0.69, k=20, max_retries=3): 
+def semantic_search_FAISS(text_chunks, queries, filename, task_id, embedding_model, sim_threshold=0.69, k=20, max_retries=3): 
     """
     Perform a semantic search over a collection of text chunks using a vector store with FAISS.
     The vector store is saved for future use.
@@ -563,6 +502,8 @@ def semantic_search_FAISS(text_chunks, queries, filename, embedding_model, sim_t
             containing additional metadata (e.g., page number).
         queries (list of str): A list of query strings to search for in the text chunks.
         filename (str): The name of the file being processed (used for naming the vector store)
+        task_id (str): Unique task identifier
+        embedding_model: The embedding model to use
         sim_threshold (float, optional): The minimum cosine similarity score to consider a match. Defaults to 0.69.
         k (int, optional): The number of top matches to retrieve for each query. Defaults to 20.
         max_retries (int, optional): The maximum number of retries for creating embeddings in case of service unavailability. Defaults to 3.
@@ -576,7 +517,7 @@ def semantic_search_FAISS(text_chunks, queries, filename, embedding_model, sim_t
     documents = [Document(page_content=chunk['text'], metadata=chunk.get("metadata", {})) for chunk in text_chunks]
     
     # Create the vector store directory if it doesn't exist
-    vector_store_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'vector_stores')
+    vector_store_dir = os.path.join(get_task_results_folder(task_id), 'vector_stores')
     os.makedirs(vector_store_dir, exist_ok=True)
     
     # Create a unique name for this document's vector store
@@ -614,69 +555,59 @@ def semantic_search_FAISS(text_chunks, queries, filename, embedding_model, sim_t
                 })
     return matches
 
-def semantic_search_Chroma(text_chunks, queries, filename, embedding_model, sim_threshold=0.65, k=20):
+def semantic_search_Chroma(text_chunks, queries, filename, task_id, embedding_model, sim_threshold=0.65, k=20):
     """
-    Perform a semantic search over a collection of text chunks using Chroma with cosine similarity.
-    The vector store is saved for future use.
+    Perform semantic search using Chroma with task-specific vector store.
 
     Args:
-        text_chunks (list of dict): A list of dictionaries where each dictionary represents a text chunk.
-            Each dictionary must have a 'text' key containing the text content, and optionally a 'metadata' key
-            containing additional metadata (e.g., page number).
-        queries (list of str): A list of query strings to search for in the text chunks.
-        filename (str): The name of the file being processed (used for naming the vector store)
-        sim_threshold (float, optional): The minimum cosine similarity score to consider a match. Defaults to 0.65.
-        k (int, optional): The number of top matches to retrieve for each query. Defaults to 20.
+        text_chunks (list of dict): Text chunks with metadata
+        queries (list of str): Query strings
+        filename (str): Original filename
+        task_id (str): Unique task identifier
+        embedding_model: The embedding model to use
+        sim_threshold (float): Similarity threshold
+        k (int): Number of results to retrieve
 
     Returns:
-        list of dict: A list of dictionaries representing the matched results. Each dictionary contains:
-            - "text" (str): The content of the matched text chunk.
-            - "page" (int or str): The page number from the metadata, or "N/A" if not provided.
-            - "score" (float): The cosine similarity score of the match (higher is better, threshold of sim_threshold is applied).
+        list of dict: Matched results with text, page, and score
     """
     
     documents = []
     for chunk in text_chunks:
         metadata = chunk.get("metadata", {})
         if isinstance(metadata, dict):
-            # Only filter if metadata is a dictionary
             try:
                 metadata = filter_complex_metadata(metadata)
             except Exception as e:
-                # Fallback if filtering fails
                 metadata = {k: str(v) for k, v in metadata.items() if k != "metadata"}
         else:
-            # Convert non-dict metadata to a simple dict
             metadata = {"raw_metadata": str(metadata)}
         
         documents.append(Document(page_content=chunk['text'], metadata=metadata))
     
-    # Create the vector store directory if it doesn't exist
-    vector_store_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'vector_stores')
+    # Create task-specific vector store directory
+    vector_store_dir = os.path.join(get_task_results_folder(task_id), 'vector_stores')
     os.makedirs(vector_store_dir, exist_ok=True)
     
-    # Create a unique name for this document's vector store
     base_filename = os.path.splitext(os.path.basename(filename))[0]
     vector_store_path = os.path.join(vector_store_dir, f"{base_filename}_chroma")
     
-    # Create and save the vector store with cosine similarity
+    # Create and save the vector store
     vectorstore = Chroma.from_documents(
         documents=documents,
         embedding=embedding_model,
         collection_name=base_filename,
         persist_directory=vector_store_path
     )
-    vectorstore.persist()  # Save the vectorstore to disk
+    vectorstore.persist()
 
-    # Perform similarity search for each query
+    # Perform similarity search
     matches = []
     for query in queries:
-        # Getting results with scores (Chroma uses cosine similarity by default)
         results = vectorstore.similarity_search_with_score(query, k=len(text_chunks))
         
         for res, score in results:
-            # In Chroma, higher score = more similar with cosine similarity
-            if score >= sim_threshold:  # Apply the similarity threshold
+            if score >= sim_threshold:
                 matches.append({
                     "text": res.page_content,
                     "filename": res.metadata.get("filename", "N/A"),
@@ -686,13 +617,14 @@ def semantic_search_Chroma(text_chunks, queries, filename, embedding_model, sim_
         
     return matches
 
-def extract_quotes(matches, filename):
+def extract_quotes(matches, filename, task_id):
     """
     Process semantic search matches to extract quotes using get_quotes function.
     
     Args:
         matches (list): List of matches from semantic search
         filename (str): Base name of the file being processed
+        task_id (str): Unique task identifier
     
     Returns:
         list: Original matches with extracted quotes added
@@ -720,7 +652,7 @@ def extract_quotes(matches, filename):
             logging.warning(f"High API call count ({estimated_calls}) may trigger rate limits")
         
         # Create the by-products folder if it doesn't exist
-        by_products_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'by-products')
+        by_products_folder = os.path.join(get_task_results_folder(task_id), 'by-products')
         os.makedirs(by_products_folder, exist_ok=True)
         
         # Extract quotes using the provided utility with enhanced error handling
@@ -765,17 +697,6 @@ def highlight_terms_in_pdf(pdf_path, query_terms):
     highlighted_path = pdf_path.replace(".pdf", "_highlighted.pdf")
     doc.save(highlighted_path)
     return highlighted_path
-
-# DEPRECATED: This function is not used in the current pipeline.
-def extract_text_and_highlight(pdf_path, query_terms):
-    """
-    TODO: Highlighting missing
-    """
-    unstructured_text = extract_text_with_unstructured(pdf_path)
-    chunks = semantic_search_FAISS(unstructured_text, query_terms, os.path.splitext(os.path.basename(pdf_path))[0])
-    citations = extract_quotes(chunks, os.path.basename(pdf_path))
-    #highlighted_path = highlight_terms_in_pdf(pdf_path, query_terms)
-    return citations#, highlighted_path
 
 def debug_quote_processing(quotes_dict, task_id):
     """Debug function to trace quote processing"""
@@ -877,40 +798,14 @@ def classify_quotes(quotes_dict, file_directory):
         # Classification of quotes into predefined categories
         output_df = tagging_classifier_quotes(quotes_dict=enhanced_quotes_dict, llm=LLM, fewshot=True)
         
-        # ✅ Verification status is already included in the DataFrame
+        # Verification status is already included in the DataFrame
         if 'verification_status' in output_df.columns:
             verified_count = (output_df['verification_status'] == 'Verified').sum()
             unverified_count = (output_df['verification_status'] == 'Unverified').sum()
             app.logger.info(f"[CLASSIFY {task_id}] Final verification counts: {verified_count} verified, {unverified_count} unverified")
 
-        '''
-        # NEW: Add verification status column to the DataFrame
-        # We need to map the verification status back to the classified quotes
-        verification_status = []
-        quote_index = 0
-        
-        for key, value in quotes_dict.items():
-            for quote_tuple in value['quotes']:
-                if quote_index < len(output_df):
-                    # Extract verification status from the 3rd element
-                    is_verified = quote_tuple[2] if len(quote_tuple) > 2 else True
-                    verification_status.append(is_verified)
-                quote_index += 1
-        
-        # Add verification column to DataFrame
-        if len(verification_status) == len(output_df):
-            output_df['verified'] = verification_status
-            output_df['verification_status'] = output_df['verified'].apply(lambda x: 'Verified' if x else 'Unverified')
-            app.logger.info(f"✅ Verification status added: {sum(verification_status)} verified, {len(verification_status) - sum(verification_status)} unverified")
-        else:
-            app.logger.warning(f"❌ Verification status length mismatch: {len(verification_status)} vs {len(output_df)}")
-            # Fallback - mark all as verified
-            output_df['verified'] = True
-            output_df['verification_status'] = 'Verified'
-        '''
-
         # Save results in Excel and CSV{LLM.model_name}_{namespace}
-        by_products_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'by-products')
+        by_products_folder = os.path.join(get_task_results_folder(task_id), 'by-products')
         os.makedirs(by_products_folder, exist_ok=True)  # Ensure the subfolder exists
         
         try:
@@ -940,7 +835,7 @@ def classify_quotes(quotes_dict, file_directory):
         app.logger.error(f"Classification traceback: {traceback.format_exc()}")
         raise  # Re-raise to be caught by process_document
 
-def postprocess_results(file_directory, output_df, filename, summary_data=None):
+def postprocess_results(file_directory, output_df, filename, task_id, summary_data=None):
     """
     Post-processing of Results:
     -----------------------
@@ -952,13 +847,14 @@ def postprocess_results(file_directory, output_df, filename, summary_data=None):
         input_file (str): The directory of the input file.
         output_df (pd.DataFrame): The DataFrame containing the results of the pipeline.
         filename (str): The name of the file.
+        task_id (str): Unique task identifier.
         summary_data (dict): The summary data generated by the AI model.
     Returns:
         None
     """
 
-    # create output folder
-    output_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'output')
+    # create task-specific output folder
+    output_folder = os.path.join(get_task_results_folder(task_id), 'output')
     os.makedirs(output_folder, exist_ok=True)  # Ensure the subfolder exists
 
     # highlight quotes
@@ -1069,7 +965,7 @@ def postprocess_results(file_directory, output_df, filename, summary_data=None):
             f.write("No summary data available.\n")
         logging.info(f"No summary data provided; created empty summary file at: {summary_txt_path}")
 
-    # ✅ CORRECTED: Save to Excel with conditional formatting
+    # Save to Excel with conditional formatting
     excel_path = os.path.join(output_folder, f"{os.path.splitext(os.path.basename(filename))[0]}_results.xlsx")
     
     try:
@@ -1178,44 +1074,50 @@ def classify_citations(citations):
         results.append(item)
     return results
 
-def create_results_zip():
+def create_results_zip(task_id):
     """
     Creates a zip file containing the entire results folder
     
+    Args:
+        task_id (str): Unique task identifier
+
     Returns:
         io.BytesIO: An in-memory zip file containing the results folder
     """
-    results_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results')
+    task_results_folder = get_task_results_folder(task_id)
     
     # Check if the results folder exists and contains files
-    if not os.path.exists(results_folder) or not any(os.scandir(results_folder)):
-        raise FileNotFoundError("The results folder is empty or does not exist.")
+    if not os.path.exists(task_results_folder) or not any(os.scandir(task_results_folder)):
+        raise FileNotFoundError(f"The results folder is empty or does not exist for task {task_id}.")
     
     memory_file = io.BytesIO()
     
     with ZipFile(memory_file, 'w') as zf:
-        for root, dirs, files in os.walk(results_folder):
+        for root, dirs, files in os.walk(task_results_folder):
             for file in files:
                 file_path = os.path.join(root, file)
                 # Calculate the relative path for the file in the zip
-                relative_path = os.path.relpath(file_path, app.config['UPLOAD_FOLDER'])
+                relative_path = os.path.relpath(file_path, task_results_folder)
                 zf.write(file_path, relative_path)
-     
-        # Add the log file to the zip    
-        log_file = os.path.join(app.config['UPLOAD_FOLDER'], 'results', 'logs', 'app.log')
+
+        # Add the log file to the zip
+        log_file = os.path.join(task_results_folder, 'logs', 'app.log')
         if os.path.exists(log_file):
-            zf.write(log_file, os.path.relpath(log_file, app.config['UPLOAD_FOLDER']))
+            zf.write(log_file, os.path.relpath(log_file, task_results_folder))
 
         # Create a manifest file listing the contents of the zip
         manifest_content = f"""TRANSPORT POLICY MINER - RESULTS PACKAGE
 ==========================================
+Task ID: {task_id}
 Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}
 
 CONTENTS:
-- output/: Final analysis results (Excel, highlighted PDF)
+- output/: Final analysis results (Excel, highlighted PDF, AI summary)
 - by-products/: Intermediate processing files (JSON, CSV)
 - vector_stores/: Semantic search indexes
 - logs/: Processing logs
+
+Each task has its own isolated folder to prevent conflicts.
 """
         zf.writestr("README.txt", manifest_content)
 
@@ -1223,6 +1125,7 @@ CONTENTS:
     memory_file.seek(0)
     return memory_file
 
+# DEPRECATED: replaced by cleanup_old_task_results() 
 def cleanup_old_results(keep_base_filename=None):
     """
     Clean up old result files, optionally keeping files for a specific document
@@ -1265,29 +1168,31 @@ def cleanup_old_results(keep_base_filename=None):
     except Exception as e:
         app.logger.error(f"Error during cleanup: {e}")
 
-def create_partial_results_zip():
+def create_partial_results_zip(task_id):
     """
     Creates a zip file containing any available results, even if processing failed
     
+    Args:
+        task_id (str): Unique task identifier
     Returns:
         io.BytesIO: An in-memory zip file containing available results
     """
-    results_folder = os.path.join(app.config['UPLOAD_FOLDER'], 'results')
-    
+    task_results_folder = get_task_results_folder(task_id)
+
     # Check if the results folder exists
-    if not os.path.exists(results_folder):
-        raise FileNotFoundError("No results folder found.")
+    if not os.path.exists(task_results_folder):
+        raise FileNotFoundError(f"No results folder found for task {task_id}.")
     
     memory_file = io.BytesIO()
     files_added = 0
     
     with ZipFile(memory_file, 'w') as zf:
         # Add any files that exist in the results folder structure
-        for root, dirs, files in os.walk(results_folder):
+        for root, dirs, files in os.walk(task_results_folder):
             for file in files:
                 file_path = os.path.join(root, file)
                 # Calculate the relative path for the file in the zip
-                relative_path = os.path.relpath(file_path, app.config['UPLOAD_FOLDER'])
+                relative_path = os.path.relpath(file_path, task_results_folder)
                 zf.write(file_path, relative_path)
                 files_added += 1
         
@@ -1295,6 +1200,7 @@ def create_partial_results_zip():
         if files_added == 0:
             readme_content = """PARTIAL RESULTS README
 ============================
+Task ID: {task_id}
 
 This download contains partial results from a processing task that encountered an error.
 
@@ -1302,9 +1208,9 @@ Unfortunately, no output files were generated before the error occurred.
 However, you may find useful information in the error details provided in the web interface.
 
 For support, please provide:
-1. The error message and traceback
-2. The original document you were trying to process
-3. Any query terms you specified
+1. The task ID: {task_id}
+2. The error message and traceback
+3. The original document you were trying to process
 
 """
             zf.writestr("README_PARTIAL_RESULTS.txt", readme_content)
@@ -1546,13 +1452,50 @@ def process_document(task_id, file_path, query_terms, filename, document_pages=N
         document_pages (int): Pre-calculated page count
         estimated_minutes (int): Pre-calculated estimated processing time
     """
+    task_logger = None  # Initialize to None for error handling
+    task_handler = None
+
     try:
-        # ✅ Store current task ID for debugging
+        # Store current task ID for debugging
         processing_tasks['current_task_id'] = task_id
 
         # Clean up old results before starting new processing
-        base_filename = os.path.splitext(filename)[0]
-        cleanup_old_results(keep_base_filename=base_filename)
+        #base_filename = os.path.splitext(filename)[0]
+        #cleanup_old_results(keep_base_filename=base_filename)
+
+        # Create task-specific folder structure
+        task_results_folder = get_task_results_folder(task_id)
+        by_products_folder = os.path.join(task_results_folder, 'by-products')
+        output_folder = os.path.join(task_results_folder, 'output')
+        vector_store_folder = os.path.join(task_results_folder, 'vector_stores')
+        logs_folder = os.path.join(task_results_folder, 'logs')
+
+        for folder in [by_products_folder, output_folder, vector_store_folder, logs_folder]:
+            os.makedirs(folder, exist_ok=True)
+        
+        # Create task-specific log file
+        task_log_file = os.path.join(logs_folder, f'{task_id}_processing.log')
+        task_handler = logging.FileHandler(task_log_file)
+        task_handler.setLevel(logging.INFO)
+        task_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        
+        # Add task handler to logger
+        task_logger = logging.getLogger(f'task_{task_id}')
+        task_logger.addHandler(task_handler)
+        task_logger.setLevel(logging.INFO)
+
+        # RICH HEADER LOGGING
+        task_logger.info("="*80)
+        task_logger.info("TRANSPORT POLICY MINER - PROCESSING LOG")
+        task_logger.info("="*80)
+        task_logger.info(f"Task ID: {task_id}")
+        task_logger.info(f"Document: {filename}")
+        task_logger.info(f"Document Pages: {document_pages}")
+        task_logger.info(f"Estimated Processing Time: {estimated_minutes} minutes")
+        task_logger.info(f"Query Terms: {len(query_terms)} terms provided")
+        task_logger.info(f"Results Folder: {task_results_folder}")
+        task_logger.info(f"Start Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        task_logger.info("="*80)
 
         # Initialize progress tracking
         processing_tasks[task_id] = {
@@ -1565,23 +1508,41 @@ def process_document(task_id, file_path, query_terms, filename, document_pages=N
             "partial_results": {},  # Store partial results,
             "last_heartbeat": time.time(),  # Add heartbeat timestamp
             "estimated_time_minutes": estimated_minutes,
-            "document_pages": document_pages
+            "document_pages": document_pages,
+            "results_folder": task_results_folder,  # Store the results folder path
+            "log_file": task_log_file  # Store the log file path
         }
         
         # Start total runtime timer
         total_start_time = time.time()
         total_tokens_used = 0  # Initialize total token counter
+        
+        task_logger.info("")
+        task_logger.info("PHASE 0: INITIALIZATION")
+        task_logger.info("-"*40)
 
         # Step 0: Initialize task
         # Detect document length for time estimation
         processing_tasks[task_id]["status"] = "Document analyzed: {} pages. Starting text extraction...".format(document_pages)
         processing_tasks[task_id]["progress"] = 5
         processing_tasks[task_id]["last_heartbeat"] = time.time()  
+        
+        task_logger.info(f"Task initialized successfully")
+        task_logger.info(f"Folder structure created")
+        task_logger.info(f"Memory usage: {psutil.Process().memory_info().rss / 1024 / 1024:.1f} MB")
 
         # Step 1: Extract text with Unstructured (20%)
-        start_time = time.time()
+        task_logger.info("")
+        task_logger.info("PHASE 1: TEXT EXTRACTION")
+        task_logger.info("-"*40)
+        step_start_time = time.time()
         processing_tasks[task_id]["status"] = "Extracting text from document..."
-        unstructured_text = extract_text_with_unstructured(file_path)
+        task_logger.info(f"Starting text extraction from PDF: {file_path}")
+        task_logger.info(f"Using Unstructured library with multi-language support")
+
+        unstructured_text = extract_text_with_unstructured(file_path, task_id)
+        
+        preprocessing_time = time.time() - step_start_time
         processing_tasks[task_id]["progress"] = 20
         processing_tasks[task_id]["status"] = "Text extraction completed."
         processing_tasks[task_id]["last_heartbeat"] = time.time()
@@ -1590,122 +1551,252 @@ def process_document(task_id, file_path, query_terms, filename, document_pages=N
         processing_tasks[task_id]["partial_results"]["total_partitions"] = len(unstructured_text)
         processing_tasks[task_id]["partial_results"]["text_extraction_complete"] = True
         processing_tasks[task_id]["status"] = "Text extraction completed."
-        preprocessing_time = time.time() - start_time
-        logging.info(f"Text extraction completed for file: {filename} in {preprocessing_time:.2f} seconds.")
+
+        task_logger.info(f"Text extraction completed in {preprocessing_time:.2f} seconds")
+        task_logger.info(f"Extracted {len(unstructured_text)} text chunks/partitions")
+        task_logger.info(f"Average chunk length: {sum(len(chunk.get('text', '')) for chunk in unstructured_text) / len(unstructured_text):.0f} characters")
+        task_logger.info(f"Memory usage: {psutil.Process().memory_info().rss / 1024 / 1024:.1f} MB")
         
         # Memory cleanup
         gc.collect()
 
         # Step 2: Perform semantic search (40%)
-        start_time = time.time()
+        task_logger.info("")
+        task_logger.info("PHASE 2: SEMANTIC SEARCH")
+        task_logger.info("-"*40)
+        step_start_time = time.time()
         processing_tasks[task_id]["status"] = "Preparing semantic search..."
         processing_tasks[task_id]["progress"] = 25
         processing_tasks[task_id]["last_heartbeat"] = time.time()
+        
+        task_logger.info(f"Starting semantic search with FAISS vector store")
+        task_logger.info(f"Using Azure OpenAI embeddings: {os.environ.get('AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME')}")
+        task_logger.info(f"Searching with {len(query_terms)} query terms")
+        task_logger.info(f"Creating vector store at: {vector_store_folder}")
 
         processing_tasks[task_id]["status"] = "Performing semantic search..."
         processing_tasks[task_id]["last_heartbeat"] = time.time()
+
         chunks = semantic_search_FAISS(unstructured_text, query_terms, 
                                       os.path.splitext(os.path.basename(file_path))[0],
+                                      task_id=task_id,
                                       embedding_model=EMBEDDING)
+
+        retrieval_time = time.time() - step_start_time
         processing_tasks[task_id]["partial_results"]["search_results"] = chunks[:20]  # Limit for performance
         processing_tasks[task_id]["partial_results"]["total_search_results"] = len(chunks)
         processing_tasks[task_id]["partial_results"]["semantic_search_complete"] = True  # Mark as completed
         processing_tasks[task_id]["progress"] = 30
         processing_tasks[task_id]["status"] = "Semantic search completed."
         processing_tasks[task_id]["last_heartbeat"] = time.time()
-        retrieval_time = time.time() - start_time
-        logging.info(f"Semantic search completed for file: {filename} in {retrieval_time:.2f} seconds.")
+
+        task_logger.info(f"Semantic search completed in {retrieval_time:.2f} seconds")
+        task_logger.info(f"Found {len(chunks)} relevant text chunks")
+        task_logger.info(f"Average similarity score: {sum(chunk.get('score', 0) for chunk in chunks) / len(chunks):.3f}")
+        task_logger.info(f"Score range: {min(chunk.get('score', 0) for chunk in chunks):.3f} - {max(chunk.get('score', 0) for chunk in chunks):.3f}")
+        task_logger.info(f"Vector store saved successfully")
+        task_logger.info(f"Memory usage: {psutil.Process().memory_info().rss / 1024 / 1024:.1f} MB")
         
         # Memory cleanup
         gc.collect()
 
         # Step 3: Extract quotes (60%)
-        start_time = time.time()
+        task_logger.info("")
+        task_logger.info("PHASE 3: QUOTE EXTRACTION")
+        task_logger.info("-"*40)
+        step_start_time = time.time()
         processing_tasks[task_id]["status"] = "Extracting quotes from relevant sections..."
         processing_tasks[task_id]["progress"] = 40
         processing_tasks[task_id]["last_heartbeat"] = time.time()
-        citations, tokens_used = extract_quotes(chunks, os.path.basename(file_path))
+        
+        estimated_api_calls = len(chunks) * 2
+        task_logger.info(f"Starting quote extraction with Azure OpenAI")
+        task_logger.info(f"Using model: {os.environ.get('AZURE_OPENAI_CHAT_DEPLOYMENT_NAME')}")
+        task_logger.info(f"Processing {len(chunks)} text chunks")
+        task_logger.info(f"Estimated API calls: {estimated_api_calls}")
+        
+        if estimated_api_calls > 50:
+            task_logger.warning(f"⚠️  High API call count may trigger rate limits")
+        
+        citations, tokens_used = extract_quotes(chunks, os.path.basename(file_path), task_id)
         total_tokens_used += tokens_used  # Update total tokens used
+
+        
+        quotation_time = time.time() - step_start_time        
         processing_tasks[task_id]["partial_results"]["extracted_quotes"] = citations
         processing_tasks[task_id]["partial_results"]["quote_extraction_complete"] = True
         processing_tasks[task_id]["progress"] = 60
         processing_tasks[task_id]["status"] = "Quote extraction completed."
         processing_tasks[task_id]["last_heartbeat"] = time.time()
         processing_tasks[task_id]["partial_results"]["quote_extraction"] = True  # Mark as completed
-        quotation_time = time.time() - start_time
-        logging.info(f"Quote extraction completed for file: {filename} in {quotation_time:.2f} seconds. Tokens used: {tokens_used}.")
+
+        # Count verified vs unverified quotes
+        verified_count = sum(len(item.get('quotes', [])) for item in citations.values())
+        unverified_count = sum(len(item.get('unverified_quotes', [])) for item in citations.values())
+
+        task_logger.info(f"Quote extraction completed in {quotation_time:.2f} seconds")
+        task_logger.info(f"Extracted {verified_count} verified quotes")
+        task_logger.info(f"Extracted {unverified_count} unverified quotes")
+        task_logger.info(f"Total quotes: {verified_count + unverified_count}")
+        task_logger.info(f"Tokens used: {tokens_used:,}")
+        task_logger.info(f"API calls per second: {estimated_api_calls/quotation_time:.2f}")
+        task_logger.info(f"Memory usage: {psutil.Process().memory_info().rss / 1024 / 1024:.1f} MB")
         
         # Memory cleanup
         gc.collect()
 
         # Step 4: Classify quotes (80%)
-        start_time = time.time()
+        task_logger.info("")
+        task_logger.info("PHASE 4: QUOTE CLASSIFICATION")
+        task_logger.info("-"*40)
+        step_start_time = time.time()
         processing_tasks[task_id]["status"] = "Preparing AI classification..."
         processing_tasks[task_id]["progress"] = 65
         processing_tasks[task_id]["last_heartbeat"] = time.time()
+        
+        task_logger.info(f"Starting quote classification with few-shot learning")
+        task_logger.info(f"Using model: {LLM.model_name}")
+        task_logger.info(f"Classifying {verified_count + unverified_count} quotes")
+        
         processing_tasks[task_id]["status"] = "Classifying extracted quotes..."
         processing_tasks[task_id]["progress"] = 70
         processing_tasks[task_id]["last_heartbeat"] = time.time()
         
-        app.logger.info(f"[TASK {task_id}] Starting quote classification")
         with get_openai_callback() as cb:
             classified = classify_quotes(citations, file_path)
             tokens_used = cb.total_tokens
             total_tokens_used += tokens_used  # Update total tokens used
-        app.logger.info(f"[TASK {task_id}] Quote classification completed successfully")
 
+        task_logger.info(f"Quote classification completed successfully")
+
+        classification_time = time.time() - step_start_time
         processing_tasks[task_id]["partial_results"]["classified_quotes"] = _sanitize_for_json(classified.to_dict('records'))
         processing_tasks[task_id]["partial_results"]["classification_complete"] = True
         processing_tasks[task_id]["progress"] = 80
         processing_tasks[task_id]["status"] = "AI classification completed."
         processing_tasks[task_id]["last_heartbeat"] = time.time()
         processing_tasks[task_id]["partial_results"]["classification"] = True  # Mark as completed
-        classification_time = time.time() - start_time
-        logging.info(f"Quote classification completed for file: {filename} in {classification_time:.2f} seconds. Tokens used: {tokens_used}.")
+        
+        # Count classifications
+        targets_count = (classified['target'] == 'True').sum()
+        mitigation_count = (classified['mitigation_measure'] == 'True').sum()
+        adaptation_count = (classified['adaptation_measure'] == 'True').sum()
+
+        task_logger.info(f"Classification completed in {classification_time:.2f} seconds")
+        task_logger.info(f"Classified {len(classified)} quotes")
+        task_logger.info(f"Targets: {targets_count} quotes")
+        task_logger.info(f"Mitigation measures: {mitigation_count} quotes")
+        task_logger.info(f"Adaptation measures: {adaptation_count} quotes")
+        task_logger.info(f"Tokens used: {tokens_used:,}")
+        task_logger.info(f"Memory usage: {psutil.Process().memory_info().rss / 1024 / 1024:.1f} MB")
 
         # Memory cleanup
         gc.collect()
 
         # Step 5: Post-process results (100%)
-        start_time = time.time()
+        task_logger.info("")
+        task_logger.info("PHASE 5: AI SUMMARY GENERATION")
+        task_logger.info("-"*40)
+        step_start_time = time.time()
         processing_tasks[task_id]["status"] = "Generating AI summary and insights..."
         processing_tasks[task_id]["progress"] = 85
+        
+        task_logger.info(f"Generating comprehensive AI summary")
+        task_logger.info(f"Using model: {LLM.model_name}")
+
         with get_openai_callback() as cb:
             summary_data = generate_summary_insights(LLM, citations, classified.to_dict('records'), filename)
             tokens_used = cb.total_tokens
             total_tokens_used += tokens_used  # Update total tokens used
+        
         processing_tasks[task_id]["summary"] = summary_data # Store summary data
         processing_tasks[task_id]["partial_results"]["summary_complete"] = True
-        summary_time = time.time() - start_time
-        logging.info(f"AI summary generated for file: {filename} in {summary_time:.2f} seconds.")
+        summary_time = time.time() - step_start_time
+        task_logger.info(f"AI summary generated in {summary_time:.2f} seconds")
+        task_logger.info(f"Summary sections: {len(summary_data.get('summary_sections', {}))}")
+        task_logger.info(f"Tokens used: {tokens_used:,}")
+        task_logger.info(f"Memory usage: {psutil.Process().memory_info().rss / 1024 / 1024:.1f} MB")
 
         processing_tasks[task_id]["status"] = "Finalizing results..."
         processing_tasks[task_id]["progress"] = 90
         processing_tasks[task_id]["last_heartbeat"] = time.time()
-        postprocess_results(file_path, classified, filename, summary_data)
+        
+        task_logger.info(f"Starting post-processing")
+        task_logger.info(f"Creating highlighted PDF")
+        task_logger.info(f"Generating Excel output with conditional formatting")
+        task_logger.info(f"Saving results to: {output_folder}")
+
+        postprocess_results(file_path, classified, filename, task_id, summary_data)
+        
+        postprocessing_time = time.time() - step_start_time
         processing_tasks[task_id]["progress"] = 100
         processing_tasks[task_id]["status"] = "Analysis complete"
         processing_tasks[task_id]["last_heartbeat"] = time.time()
         processing_tasks[task_id]["partial_results"]["postprocessing"] = True  # Mark as completed
-        postprocessing_time = time.time() - start_time
-        logging.info(f"Post-processing completed for task_id: {task_id}, file: {filename} in {postprocessing_time:.2f} seconds.")
+
+        task_logger.info(f"Post-processing completed in {postprocessing_time:.2f} seconds")
+        task_logger.info(f"Highlighted PDF created")
+        task_logger.info(f"Excel file with 3 sheets created")
+        task_logger.info(f"AI summary text file created")
+        task_logger.info(f"All files saved to output folder")
 
         # Calculate total runtime
         total_elapsed_time = time.time() - total_start_time
 
-        logging.info(f"Total processing time for file: {filename} was {total_elapsed_time:.2f} seconds.")
-        logging.info(f"Total tokens used for file: {filename} was {total_tokens_used}.")
+        # ✅ FINAL SUMMARY - BEFORE CLEANUP
+        task_logger.info("")
+        task_logger.info("="*80)
+        task_logger.info("PROCESSING COMPLETED SUCCESSFULLY")
+        task_logger.info("="*80)
+        task_logger.info(f"Total Runtime: {total_elapsed_time:.2f} seconds ({total_elapsed_time/60:.1f} minutes)")
+        task_logger.info(f"Total Tokens Used: {total_tokens_used:,}")
+        
+        # Calculate token costs (approximate)
+        # GPT-4 pricing: ~$0.03 per 1K input tokens, ~$0.06 per 1K output tokens (average ~$0.045)
+        estimated_cost = (total_tokens_used / 1000) * 0.045
+        task_logger.info(f"Estimated API Cost: ${estimated_cost:.2f} USD")
+        
+        task_logger.info(f"Performance:")
+        task_logger.info(f"  - Tokens per second: {total_tokens_used/total_elapsed_time:.1f}")
+        task_logger.info(f"  - Pages per minute: {document_pages/(total_elapsed_time/60):.1f}")
+        task_logger.info(f"  - Final memory usage: {psutil.Process().memory_info().rss / 1024 / 1024:.1f} MB")
+        
+        task_logger.info(f"Output Summary:")
+        task_logger.info(f"  - Targets found: {targets_count}")
+        task_logger.info(f"  - Mitigation measures: {mitigation_count}")
+        task_logger.info(f"  - Adaptation measures: {adaptation_count}")
+        task_logger.info(f"  - Total quotes: {verified_count + unverified_count}")
+        
+        task_logger.info(f"End Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        task_logger.info("="*80)
 
         # Store results for retrieval
         processing_tasks[task_id]["status"] = "Analysis complete"
         processing_tasks[task_id]["result"] = citations
         processing_tasks[task_id]["total_runtime_seconds"] = total_elapsed_time  
         processing_tasks[task_id]["total_tokens_used"] = total_tokens_used    
+
+        # Clean up logger AFTER all logging is done
+        if task_handler:
+            task_handler.close()
+            task_logger.removeHandler(task_handler)
         
     except Exception as e:
         # Capture the full traceback
         exc_type, exc_value, exc_traceback = sys.exc_info()
         error_traceback = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+        
+        # Log error to task-specific log if available
+        if task_logger:
+            task_logger.error("")
+            task_logger.error("="*80)
+            task_logger.error("PROCESSING FAILED")
+            task_logger.error("="*80)
+            task_logger.error(f"Error: {str(e)}")
+            task_logger.error(f"Error Type: {type(e).__name__}")
+            task_logger.error(f"Traceback:")
+            task_logger.error(error_traceback)
+            task_logger.error("="*80)
         
         # Handle any errors with detailed information
         processing_tasks[task_id]["error"] = str(e)
@@ -1716,6 +1807,11 @@ def process_document(task_id, file_path, query_terms, filename, document_pages=N
         logging.error(f"Error processing document: {e}")
         logging.error(f"Traceback: {error_traceback}")
         app.logger.error(f"Task {task_id} failed: {e}")
+        
+        if 'task_logger' in locals():
+            task_logger.error(f"Processing failed: {e}")
+            task_handler.close()
+            task_logger.removeHandler(task_handler)
 
 @app.route('/health')
 def health_check():
@@ -2154,12 +2250,16 @@ def download_results():
         task_id = request.args.get('task_id', '')
         original_filename = request.args.get('filename', '')
         
+        # Validate task_id
+        if not task_id:
+            return "Task ID required", 400
+        
         # If no filename provided, try to get it from the task
         if not original_filename and task_id and task_id in processing_tasks:
             original_filename = processing_tasks[task_id].get('original_filename', '')
         
-        # Create zip file
-        memory_file = create_results_zip()
+        # Create a task-specific zip file
+        memory_file = create_results_zip(task_id)
         
         # Create proper download filename
         if original_filename:
@@ -2172,13 +2272,7 @@ def download_results():
             timestamp = time.strftime('%Y%m%d_%H%M%S')
             download_name = f'transport_policy_analysis_{timestamp}.zip'
         
-        logging.info(f"Download prepared: {download_name}")
-        # Use the original filename (without extension) for the download
-        download_name = f'{base_filename}_analysis.zip'
-        
-        
-        # ✅ Free the queue slot after successful download preparation
-        #release_queue_slot(task_id)    #Queue
+        logging.info(f"Download prepared for task {task_id}: {download_name}")
 
         return send_file(
             memory_file,
@@ -2200,34 +2294,6 @@ def task_heartbeat(task_id):
         processing_tasks[task_id]["last_heartbeat"] = time.time()
         return jsonify({"status": "updated"})
     return jsonify({"status": "not_found"}), 404
-
-'''Queue
-# Background cleanup for abandoned tasks
-def cleanup_abandoned_tasks():
-    """Clean up tasks with no heartbeat for 10 minutes"""
-    while True:
-        try:
-            current_time = time.time()
-            abandoned_tasks = []
-            
-            for task_id, task in processing_tasks.items():
-                last_heartbeat = task.get("last_heartbeat", 0)
-                if current_time - last_heartbeat > 600:  # 10 minutes
-                    abandoned_tasks.append(task_id)
-            
-            for task_id in abandoned_tasks:
-                logging.info(f"Cleaning up abandoned task: {task_id}")
-                release_queue_slot(task_id)
-                
-        except Exception as e:
-            logging.error(f"Cleanup error: {e}")
-        
-        time.sleep(300)  # Check every 5 minutes
-
-# Start cleanup thread
-cleanup_thread = threading.Thread(target=cleanup_abandoned_tasks, daemon=True)
-cleanup_thread.start()
-'''
 
 @app.route('/api/partial-results/<task_id>')
 def get_partial_results(task_id):
@@ -2287,6 +2353,10 @@ def download_partial_results():
         task_id = request.args.get('task_id', '')
         original_filename = request.args.get('filename', '')
         
+        # Validate task_id
+        if not task_id:
+            return "Task ID required", 400
+        
         # If no filename provided, try to get it from the task
         if not original_filename and task_id and task_id in processing_tasks:
             original_filename = processing_tasks[task_id].get('original_filename', '')
@@ -2299,8 +2369,8 @@ def download_partial_results():
         if task.get("error") is None:
             return "No error occurred for this task. Use the regular download instead.", 400
         
-        # Create partial results zip file
-        memory_file = create_partial_results_zip()
+        # Create partial results zip file for specific task
+        memory_file = create_partial_results_zip(task_id)
         
         # Create proper download filename
         if original_filename:
@@ -2310,7 +2380,7 @@ def download_partial_results():
             timestamp = time.strftime('%Y%m%d_%H%M%S')
             download_name = f'transport_policy_partial_{timestamp}.zip'
         
-        logging.info(f"Partial download prepared: {download_name}")
+        logging.info(f"Partial download prepared for task {task_id}: {download_name}")
         
         return send_file(
             memory_file,
@@ -2392,48 +2462,6 @@ def debug_task(task_id):
     else:
         return jsonify({'task_exists': False, 'task_id': task_id})
 
-'''Queue
-@app.route('/api/debug/queue')
-def debug_queue():
-    """Debug endpoint to check queue status"""
-    return jsonify({
-        "queue_size": processing_queue.qsize(),
-        "queue_maxsize": processing_queue.maxsize,
-        "current_processing": current_processing,
-        "queue_thread_alive": queue_thread.is_alive(),
-        "active_threads": threading.active_count(),
-        "thread_names": [t.name for t in threading.enumerate()]
-    })
-
-@app.route('/api/debug/restart-queue', methods=['POST'])
-def restart_queue_processor():
-    """Manual restart of queue processor for debugging"""
-    try:
-        global queue_thread
-        
-        # Check current status
-        was_alive = False
-        if 'queue_thread' in globals():
-            was_alive = queue_thread.is_alive()
-        
-        # Attempt restart
-        success = start_queue_processor_safely()
-        
-        return jsonify({
-            "restarted": success,
-            "was_alive_before": was_alive,
-            "is_alive_now": queue_thread.is_alive() if 'queue_thread' in globals() else False,
-            "queue_size": processing_queue.qsize(),
-            "message": "Queue processor restarted successfully" if success else "Failed to restart queue processor"
-        })
-        
-    except Exception as e:
-        return jsonify({
-            "error": str(e),
-            "restarted": False
-        }), 500
-'''
-
 @app.route('/api/debug/logs-file')
 def debug_logs_file():
     """Read the last 50 lines of the log file directly"""
@@ -2452,40 +2480,23 @@ def debug_logs_file():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-'''Queue
-def initialize_queue_system():
-    """Initialize queue system after app is fully configured"""
-    try:
-        logging.info("=== INITIALIZING QUEUE SYSTEM ===")
-        
-        # Test logging first
-        logging.info("Testing logging system...")
-        
-        # Test global variables access
-        logging.info(f"LLM available: {LLM is not None}")
-        logging.info(f"EMBEDDING available: {EMBEDDING is not None}")
-        logging.info(f"processing_queue available: {processing_queue is not None}")
-        
-        # Start queue processor
-        success = start_queue_processor_safely()
-        
-        if success:
-            logging.info("=== QUEUE SYSTEM INITIALIZED SUCCESSFULLY ===")
-        else:
-            logging.critical("=== QUEUE SYSTEM FAILED TO INITIALIZE ===")
-            
-        return success
-        
-    except Exception as e:
-        logging.critical(f"=== QUEUE INITIALIZATION ERROR: {e} ===")
-        logging.critical(f"=== QUEUE INIT TRACEBACK: {traceback.format_exc()} ===")
-        return False
-'''
+def background_cleanup():
+    """Background thread to clean up old task results"""
+    while True:
+        try:
+            cleanup_old_task_results(age_hours=24)  # Clean up after 24 hours
+            time.sleep(3600)  # Run every hour
+        except Exception as e:
+            logging.error(f"Background cleanup error: {e}")
+            time.sleep(3600)  # Still wait an hour before retrying
+
+# Start cleanup thread
+logging.info("Starting background cleanup thread...")
+cleanup_thread = threading.Thread(target=background_cleanup, daemon=True, name="CleanupThread")
+cleanup_thread.start()
+logging.info("Background cleanup thread started successfully")
 
 if __name__ == '__main__':
-    # Initialize queue system after everything is loaded
-    #if not initialize_queue_system():
-    #    logging.critical("❌ CRITICAL: Queue system failed to start!")
 
     # For Render.com, use the PORT environment variable
     port = int(os.environ.get('PORT', 10000))
