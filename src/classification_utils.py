@@ -130,7 +130,8 @@ class TargetObject(BaseModel):
     #economy_wide: str = Field(description="A reduction target for greenhouse gas emissions (covering CO2 and other relevant greenhouse gases) has been set for the whole economy or collectively for all sectors covered. Does not deal with a specific sector, but with the economy in general.", enum=["True", "False"]) # not performing well, after first evaluation and comparison to single prompt
     #economy_wide: str = Field(description="The text does NOT refer to a specific sector such as transport or energy.", enum=["True", "False"]) # revisited after comparison with single-prompt results. Revisited again, after noticing that focus on ECONOMY makes it harder for model to detect cases, where no sector is specified --> not yet evaluated
     #economy_wide: str = Field(description="Does the text refer to economy-wide or national-level greenhouse gas emissions targets that cover multiple sectors or the entire economy? Examples of economy-wide targets ('True'): 'reduce (national) emissions by 30%', 'achieve carbon neutrality', 'economy-wide mitigation target'. Examples of sector-specific ('False'): 'transport emissions reduction', 'renewable energy in electricity sector', 'energy efficiency improvements'.",enum=["True", "False"]) # AI suggested revision
-    economy_wide: str = Field(description="The text does NOT refer to a specific sector such as transport or energy. Examples ('True'): 'reduce emissions by 30%', 'achieve carbon neutrality'. Examples ('False'): 'transport emissions reduction', 'renewable energy in electricity sector', 'energy efficiency improvements'.",enum=["True", "False"])
+    #economy_wide: str = Field(description="The text does NOT refer to a specific sector such as transport or energy. Examples ('True'): 'reduce emissions by 30% compared to BAU', 'achieve carbon neutrality'. Examples ('False'): 'transport emissions reduction', 'renewable energy in electricity sector', 'energy efficiency improvements'.",enum=["True", "False"])
+    sector_level: str = Field(description="The text does refer to a specific sector such as transport or energy.", enum=["True", "False"])
     # mitigation / adaptation
     mitigation: str = Field(description="Does the text concern climate change MITIGATION in a direct or indirect manner?", enum=["True", "False"])
     adaptation: str = Field(description="Does the text concern climate change ADAPTATION or building resilience against consequencs of climate change?", enum=["True", "False"])
@@ -566,7 +567,7 @@ def get_tagging_results(quotes, llm):
     targets_df = pd.DataFrame(columns=[
                                     'energy', 
                                     'transport', 
-                                    'economy_wide', 
+                                    'sector_level', 
                                     'mitigation', 
                                     'adaptation', 
                                     'ghg', 
@@ -815,7 +816,7 @@ def get_tagging_results_fewshot(quotes, llm):
     targets_df = pd.DataFrame(columns=[
                                     'energy', 
                                     'transport', 
-                                    'economy_wide', 
+                                    'sector_level', 
                                     'mitigation', 
                                     'adaptation', 
                                     'ghg', 
@@ -1067,7 +1068,7 @@ def get_tagging_results_with_context(quotes, contexts, llm):
     targets_df = pd.DataFrame(columns=[
                                     'energy', 
                                     'transport', 
-                                    'economy_wide', 
+                                    'sector_level', 
                                     'mitigation', 
                                     'adaptation', 
                                     'ghg', 
@@ -1436,9 +1437,9 @@ def target_mapping_old(row):
         targets.append('T_Netzero')
     if (row['energy'] == 'True') & (row['mitigation'] == 'True'):
         targets.append('T_Energy')
-    if (row['economy_wide'] == 'True') & (row['mitigation'] == 'True') & (row['ghg'] == 'True') & (row['conditional'] == 'False'):
+    if (row['sector_level'] == 'False') & (row['mitigation'] == 'True') & (row['ghg'] == 'True') & (row['conditional'] == 'False'):
         targets.append('T_Economy_Unc')
-    if (row['economy_wide'] == 'True') & (row['mitigation'] == 'True') & (row['ghg'] == 'True') & (row['conditional'] == 'True'):
+    if (row['sector_level'] == 'False') & (row['mitigation'] == 'True') & (row['ghg'] == 'True') & (row['conditional'] == 'True'):
         targets.append('T_Economy_C')
     if (row['transport'] == 'True') & (row['mitigation'] == 'True') & (row['ghg'] == 'True') & (row['conditional'] == 'False'):
         targets.append('T_Transport_Unc')
@@ -1476,7 +1477,7 @@ def target_mapping_new(row):
         targets.append('T_Netzero')
     if (row['energy'] == 'True') & (row['mitigation'] == 'True'):
         targets.append('T_Energy')
-    if (row['economy_wide'] == 'True') & (row['mitigation'] == 'True') & (row['ghg'] == 'True'):
+    if (row['sector_level'] == 'False') & (row['mitigation'] == 'True') & (row['ghg'] == 'True'):
         targets.append('T_Economy')
     if (row['transport'] == 'True') & (row['mitigation'] == 'True') & (row['ghg'] == 'True'):
         targets.append('T_Transport')
@@ -1520,7 +1521,8 @@ def target_area_mapping(row):
     try:
         target_area = '--'
         
-        economy_wide = safe_bool_check(row.get('economy_wide', False))
+        # economy_wide = safe_bool_check(row.get('economy_wide', False))
+        sector_level = safe_bool_check(row.get('sector_level', False))
         net_zero = safe_bool_check(row.get('net_zero', False))
         mitigation = safe_bool_check(row.get('mitigation', False))
         ghg = safe_bool_check(row.get('ghg', False)) # already covered by GHG mapping
@@ -1528,9 +1530,9 @@ def target_area_mapping(row):
         adaptation = safe_bool_check(row.get('adaptation', False))
         energy = safe_bool_check(row.get('energy', False))
         
-        if economy_wide and net_zero:
+        if not sector_level and net_zero:
             target_area = 'Net zero target'
-        elif economy_wide and mitigation:
+        elif not sector_level and mitigation:
             target_area = 'Overall mitigation target'
         elif transport and mitigation:
             target_area = 'Transport sector mitigation target'

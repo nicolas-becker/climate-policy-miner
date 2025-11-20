@@ -1258,7 +1258,7 @@ def generate_summary_insights(LLM, citations, classified_quotes, original_filena
             # Categorize quotes for targeted summaries
             # Economy-wide targets (net-zero, economy-wide mitigation)
             if (quote_data.get('target') == 'True' and 
-                (quote_data.get('economy_wide') == 'True' or quote_data.get('net_zero') == 'True')):
+                (quote_data.get('sector_level') == 'False' or quote_data.get('net_zero') == 'True')):
                 categorized_quotes['economy_wide_targets'].append(quote_text)
             
             # Transport targets (transport sector specific targets)
