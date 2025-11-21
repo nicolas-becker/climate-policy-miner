@@ -1297,45 +1297,54 @@ MITIGATION ACTIONS (Found: {len(categorized_quotes['mitigation_actions'])} quote
 ADAPTATION ACTIONS (Found: {len(categorized_quotes['adaptation_actions'])} quotes):
 {chr(10).join(f"- {quote}" for quote in categorized_quotes['adaptation_actions'])}
 
-Please provide:
-1. Executive Summary (2-3 sentences about the document's main transport policy focus)
+Please provide your analysis in the following EXACT format with Markdown section headers:
 
-2. Key Findings (3-4 bullet points about the most important insights across all categories)
+### Executive Summary
+[2-3 sentences about the document's main transport policy focus]
 
-3. Economy-wide Targets Summary (analyze the economy-wide and net-zero targets):
-   - Each bullet point should start with an ACTION VERB (e.g., "Commits to...", "Establishes...", "Targets...")
-   - Focus on what the country plans to DO, not just reproduce quotes
-   - Convert any CO2 equivalent units to megatonnes (MT CO2eq) for consistency
-   - If no economy-wide targets found, state "No specific economy-wide targets identified" and nothing else
+### Key Findings
+- [First key finding]
+- [Second key finding]
+- [Third key finding]
+- [Fourth key finding]
 
-4. Transport Targets Summary (analyze transport sector specific targets):
-   - Each bullet point should start with an ACTION VERB (e.g., "Aims to...", "Plans to...", "Seeks to...")
-   - Focus on specific transport sector commitments and goals
-   - Convert any CO2 equivalent units to megatonnes (MT CO2eq) for consistency
-   - If no transport targets found, state "No specific transport sector targets identified" and nothing else
+### Economy-wide Targets
+- Each bullet point should start with an ACTION VERB (e.g., "Commits to...", "Establishes...", "Targets...")
+- Focus on what the country plans to DO, not just reproduce quotes
+- Convert any CO2 equivalent units to megatonnes (MT CO2eq) for consistency
+- If no economy-wide targets found, state "No specific economy-wide targets identified" and nothing else
 
-5. Mitigation Actions Summary (analyze planned mitigation measures):
-   - Each bullet point should start with an ACTION VERB (e.g., "Implements...", "Develops...", "Promotes...")
-   - Focus on concrete actions and policies being implemented
-   - Group similar measures together where possible
-   - If no mitigation actions found, state "No specific mitigation actions identified" and nothing else
+### Transport Targets
+- Each bullet point should start with an ACTION VERB (e.g., "Aims to...", "Plans to...", "Seeks to...")
+- Focus on specific transport sector commitments and goals
+- Convert any CO2 equivalent units to megatonnes (MT CO2eq) for consistency
+- If no transport targets found, state "No specific transport sector targets identified" and nothing else
 
-6. Adaptation Actions Summary (analyze planned adaptation measures):
-   - Each bullet point should start with an ACTION VERB (e.g., "Strengthens...", "Builds...", "Enhances...")
-   - Focus on resilience-building and adaptation measures
-   - If no adaptation actions found, state "No specific adaptation actions identified" and nothing else
+### Mitigation Actions
+- Each bullet point should start with an ACTION VERB (e.g., "Implements...", "Develops...", "Promotes...")
+- Focus on concrete actions and policies being implemented
+- Group similar measures together where possible
+- If no mitigation actions found, state "No specific mitigation actions identified" and nothing else
+
+### Adaptation Actions
+- Each bullet point should start with an ACTION VERB (e.g., "Strengthens...", "Builds...", "Enhances...")
+- Focus on resilience-building and adaptation measures
+- If no adaptation actions found, state "No specific adaptation actions identified" and nothing else
 
 IMPORTANT INSTRUCTIONS:
+- Use EXACTLY "### Executive Summary", "### Key Findings", etc. as section headers
+- Start each section header on a new line
+- Use bullet points (starting with "-") for list items
 - Always convert CO2 equivalent numbers to megatonnes (MT CO2eq) - e.g., "1000 kt CO2eq" becomes "1 MT CO2eq"
 - Each summary bullet should describe what the country IS DOING or PLANS TO DO
 - Do not simply reproduce quotes - synthesize and summarize the content
 - Use clear, policy-relevant language suitable for decision makers
 - Structure the response into clear sections as outlined above
-- Do NOT USE ANY FORMATTING except for the section titles
+- Do NOT USE ANY FORMATTING except for the section headers and bullet points
 
 Keep the response concise but informative, suitable for policy makers and researchers.
 """
-        # ✅ NEW: Save the prompt to by-products folder for transparency
+        # Save the prompt to by-products folder for transparency
         task_id = processing_tasks.get('current_task_id', 'unknown')
         by_products_folder = os.path.join(get_task_results_folder(task_id), 'by-products')
         os.makedirs(by_products_folder, exist_ok=True)
@@ -1410,7 +1419,10 @@ Keep the response concise but informative, suitable for policy makers and resear
         }
 
 def parse_summary_response_enhanced(summary_text):
-    """Parse AI response into structured sections"""
+    """
+    Parse AI response into structured sections using Markdown headers.
+    Looks for ### headers to identify sections.
+    """
     sections = {
         'executive_summary': '',
         'key_findings': [],
@@ -1425,45 +1437,71 @@ def parse_summary_response_enhanced(summary_text):
         current_section = None
         
         for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-                
-            # Detect section headers
-            if 'executive summary' in line.lower():
-                current_section = 'executive_summary'
-                continue
-            elif 'key findings' in line.lower():
-                current_section = 'key_findings'
-                continue
-            elif 'economy-wide targets' in line.lower() or 'economy wide targets' in line.lower():
-                current_section = 'economy_wide_targets'
-                continue
-            elif 'transport targets' in line.lower():
-                current_section = 'transport_targets'
-                continue
-            elif 'mitigation actions' in line.lower():
-                current_section = 'mitigation_actions'
-                continue
-            elif 'adaptation actions' in line.lower():
-                current_section = 'adaptation_actions'
+            line_stripped = line.strip()
+            
+            # Skip empty lines
+            if not line_stripped:
                 continue
             
-            # Add content to current section
-            if current_section in ['key_findings', 'economy_wide_targets', 'transport_targets', 'mitigation_actions', 'adaptation_actions']:
-                if line.startswith(('- ', '• ', '* ', '1.', '2.', '3.', '4.', '5.')):
+            # ✅ NEW: Detect Markdown section headers (### Header)
+            if line_stripped.startswith('###'):
+                header_text = line_stripped.replace('###', '').strip().lower()
+                
+                # Map header text to section keys
+                if 'executive summary' in header_text:
+                    current_section = 'executive_summary'
+                elif 'key findings' in header_text or 'key finding' in header_text:
+                    current_section = 'key_findings'
+                elif 'economy-wide targets' in header_text or 'economy wide targets' in header_text:
+                    current_section = 'economy_wide_targets'
+                elif 'transport targets' in header_text:
+                    current_section = 'transport_targets'
+                elif 'mitigation actions' in header_text or 'mitigation action' in header_text:
+                    current_section = 'mitigation_actions'
+                elif 'adaptation actions' in header_text or 'adaptation action' in header_text:
+                    current_section = 'adaptation_actions'
+                else:
+                    # Unknown header, keep current section
+                    logging.warning(f"Unknown section header: {line_stripped}")
+                
+                continue  # Skip to next line after processing header
+            
+            # ✅ Process content based on current section
+            if current_section is None:
+                # Content before first header - ignore or log
+                continue
+            
+            # ✅ Handle list sections (key findings, targets, actions)
+            if current_section in ['key_findings', 'economy_wide_targets', 'transport_targets', 
+                                   'mitigation_actions', 'adaptation_actions']:
+                
+                # Only process lines that start with bullet points
+                if line_stripped.startswith(('- ', '• ', '* ')):
                     # Remove bullet/number formatting
-                    clean_line = line.lstrip('- •*123456789. ')
+                    clean_line = line_stripped.lstrip('- •* ').strip()
                     if clean_line:
                         sections[current_section].append(clean_line)
+                        
+            # ✅ Handle paragraph section (executive summary)
             elif current_section == 'executive_summary':
+                # Accumulate text for executive summary
                 if sections[current_section]:
-                    sections[current_section] += ' ' + line
+                    sections[current_section] += ' ' + line_stripped
                 else:
-                    sections[current_section] = line
+                    sections[current_section] = line_stripped
+        
+        # ✅ Log parsing results for debugging
+        logging.info(f"Summary parsing completed:")
+        logging.info(f"  - Executive summary: {len(sections['executive_summary'])} chars")
+        logging.info(f"  - Key findings: {len(sections['key_findings'])} items")
+        logging.info(f"  - Economy-wide targets: {len(sections['economy_wide_targets'])} items")
+        logging.info(f"  - Transport targets: {len(sections['transport_targets'])} items")
+        logging.info(f"  - Mitigation actions: {len(sections['mitigation_actions'])} items")
+        logging.info(f"  - Adaptation actions: {len(sections['adaptation_actions'])} items")
         
     except Exception as e:
         logging.error(f"Error parsing summary: {e}")
+        logging.error(f"Traceback: {traceback.format_exc()}")
     
     return sections
 
