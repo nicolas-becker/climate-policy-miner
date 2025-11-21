@@ -12,7 +12,7 @@ exec gunicorn \
     --timeout 7200 \
     --graceful-timeout 120 \
     --keep-alive 600 \
-    --max-requests 100 \
+    --max-requests 2000 \
     --max-requests-jitter 10 \
     --worker-class gthread \
     --worker-connections 1000 \
