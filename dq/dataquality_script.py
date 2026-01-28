@@ -16,6 +16,8 @@ def analyze_excel(file_path):
     # Select only the columns of interest
     columns_of_interest = [
         'Document ID',
+        'Country Code',
+        'Version number',
         'Target area',
         'Target scope',
         'GHG target?',
@@ -64,7 +66,7 @@ def analyze_excel(file_path):
     
     # Value counts for categorical columns
     print("\n6. Value Counts for Key Columns:")
-    categorical_cols = ['Target area', 'Target scope', 'Target type', 'Conditionality']
+    categorical_cols = ['Version number', 'Target area', 'Target scope', 'Target type', 'Conditionality']
     for col in categorical_cols:
         if col in df.columns:
             print(f"\n   {col}:")
@@ -220,7 +222,7 @@ def export_analysis_report(df, output_path):
             rows_with_missing.to_excel(writer, sheet_name='Incomplete Rows', index=False)
         
         # Value counts for categorical columns
-        categorical_cols = ['Target area', 'Target scope', 'Target type', 'Conditionality']
+        categorical_cols = ['Version number', 'Target area', 'Target scope', 'Target type', 'Conditionality']
         for col in categorical_cols:
             if col in df.columns:
                 value_counts = df[col].value_counts(dropna=False).reset_index()
@@ -232,7 +234,7 @@ def export_analysis_report(df, output_path):
 if __name__ == "__main__":
     # Specify your Excel file path
     input_file = "dq/excel/NDC-Database-Analysis_current_NEW.xlsx"
-    output_file = "dq/analysis_report.xlsx"
+    output_file = "dq/analysis_report_targets.xlsx"
     
     # Run analysis
     data = analyze_excel(input_file)
