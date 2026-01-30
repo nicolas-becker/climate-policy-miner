@@ -156,7 +156,7 @@ def check_year_in_content(df):
 
 def export_analysis_report(df, output_path):
     """
-    Export analysis results to Excel with multiple sheets
+    Export analysis results to Excel with multiple sheets (classic DQ analysis only)
     
     Args:
         df: DataFrame to analyze
@@ -179,42 +179,46 @@ def export_analysis_report(df, output_path):
         flag_col = f'{col}_MISSING'
         df_marked[flag_col] = df[col].isnull().map({True: '❌ MISSING', False: ''})
     
-    # README data with sheet names without spaces
+    # README data
+    readme_sheets = [
+        'README',
+        'Data',
+        'Data_with_Flags',
+        'Statistics',
+        'Missing_Values',
+        'Year_Not_In_Content',
+        'Duplicate_Rows',
+        'Incomplete_Rows',
+        'Country_Code',
+        'Version_number',
+        'Target_area',
+        'Target_scope',
+        'GHG_target',
+        'Target_type',
+        'Conditionality'
+    ]
+    
+    readme_descriptions = [
+        'This documentation sheet explaining all content - Classic Data Quality Analysis',
+        'Clean dataset without quality flags (original data only).',
+        'Complete dataset with quality flags. Missing values marked with ❌ MISSING.',
+        'Descriptive statistics for all columns.',
+        'Summary of missing values per column with count and percentage.',
+        'Rows where Target Year does not appear in Content field.',
+        'Complete duplicate rows grouped by Duplicate_Group ID.',
+        'All rows with at least one missing value.',
+        'Value counts for Country Code field.',
+        'Value counts for Version number field.',
+        'Value counts for Target area field.',
+        'Value counts for Target scope field.',
+        'Value counts for GHG target field.',
+        'Value counts for Target type field.',
+        'Value counts for Conditionality field.'
+    ]
+    
     readme_data = {
-        'Sheet Name': [
-            'README',
-            'Data',
-            'Data_with_Flags',
-            'Statistics',
-            'Missing_Values',
-            'Year_Not_In_Content',
-            'Duplicate_Rows',
-            'Incomplete_Rows',
-            'Country_Code',
-            'Version_number',
-            'Target_area',
-            'Target_scope',
-            'GHG_target',
-            'Target_type',
-            'Conditionality'
-        ],
-        'Description': [
-            'This documentation sheet explaining all content',
-            'Clean dataset without quality flags (original data only).',
-            'Complete dataset with quality flags. Missing values marked with ❌ MISSING. Year validation marked with ✓ or ❌ YEAR NOT FOUND.',
-            'Descriptive statistics for all columns: count, unique values, top values, frequencies, mean, std, min, max, percentiles.',
-            'Summary of missing values per column with count and percentage. Helps identify data completeness issues.',
-            'Rows where Target Year does not appear in Content field. Includes suggested alternative years found in content.',
-            'Complete duplicate rows grouped by Duplicate_Group ID. Group numbers start from 1. Review for potential data collection errors.',
-            'All rows with at least one missing value, with ❌ flags showing which fields are incomplete.',
-            'Value counts for Country Code field showing entries per country.',
-            'Value counts for Version number field showing NDC version distribution.',
-            'Value counts for Target area field showing distribution of target areas.',
-            'Value counts for Target scope field showing distribution of target scopes.',
-            'Value counts for GHG target field showing greenhouse gas target classification.',
-            'Value counts for Target type field showing distribution of target types.',
-            'Value counts for Conditionality field showing conditional vs unconditional targets.'
-        ]
+        'Sheet Name': readme_sheets,
+        'Description': readme_descriptions
     }
     
     with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
@@ -247,16 +251,16 @@ def export_analysis_report(df, output_path):
             cols_to_keep = [col for col in year_issues.columns if not col.endswith('_MISSING')]
             year_issues = year_issues[cols_to_keep]
             
-            # Reorder to show suggested years prominently after Target Year
             if 'Suggested_Years' in cols_to_keep and 'Target Year' in cols_to_keep:
-                cols_to_keep.remove('Suggested_Years')
-                if 'Year_In_Content' in cols_to_keep:
-                    cols_to_keep.remove('Year_In_Content')
-                target_year_idx = cols_to_keep.index('Target Year')
-                cols_to_keep.insert(target_year_idx + 1, 'Suggested_Years')
-                cols_to_keep.insert(target_year_idx + 2, 'Year_In_Content')
+                cols_to_keep_list = list(cols_to_keep)
+                cols_to_keep_list.remove('Suggested_Years')
+                if 'Year_In_Content' in cols_to_keep_list:
+                    cols_to_keep_list.remove('Year_In_Content')
+                target_year_idx = cols_to_keep_list.index('Target Year')
+                cols_to_keep_list.insert(target_year_idx + 1, 'Suggested_Years')
+                cols_to_keep_list.insert(target_year_idx + 2, 'Year_In_Content')
+                year_issues = year_issues[cols_to_keep_list]
             
-            year_issues = year_issues[cols_to_keep]
             year_issues.to_excel(writer, sheet_name='Year_Not_In_Content', index=False)
         
         # 7. DUPLICATE ROWS
@@ -393,15 +397,23 @@ def export_analysis_report(df, output_path):
             for cell in mv_ws[1]:
                 cell.fill = missing_fill
     
-    print(f"\nReport exported to: {output_path}")
+    print(f"\n✓ Report exported to: {output_path}")
 
 if __name__ == "__main__":
     # Specify your Excel file path
     input_file = "dq/excel/NDC-Database-Analysis_current_NEW.xlsx"
     output_file = "dq/analysis_report_targets.xlsx"
     
-    # Run analysis
+    # Run classic analysis
+    print("\n" + "="*80)
+    print("TARGETS DATA QUALITY ANALYSIS (Classic)")
+    print("="*80)
     data = analyze_excel(input_file)
     
     # Export report
     export_analysis_report(data, output_file)
+    
+    print("\n" + "="*80)
+    print("ANALYSIS COMPLETE")
+    print("="*80)
+    print("\nFor AI parameter validation, run: python dq/ai_validation_targets.py")
