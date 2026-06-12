@@ -1,0 +1,1151 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --green: #89AE10;
+    --green-light: #e8f2c0;
+    --green-mid: #b3d040;
+    --teal: #83C8D1;
+    --teal-light: #d4eff2;
+    --blue: #06B6F6;
+    --blue-dark: #153743;
+    --blue-light: #E0F6FE;
+    --bg: #E0F6FE;
+    --card-bg: #ffffff;
+    --text: #153743;
+    --text-muted: #4a7080;
+    --arrow: #83C8D1;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body, .wrap {
+    font-family: 'DM Sans', sans-serif;
+    background: transparent;
+    color: var(--text);
+  }
+
+  .wrap {
+    width: 100%;
+    max-width: 740px;
+    margin: 0 auto;
+    padding: 28px 20px 36px;
+  }
+
+  .pipeline-header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  .pipeline-header .eyebrow {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .pipeline-header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--blue-dark);
+    line-height: 1.3;
+    margin-bottom: 6px;
+  }
+
+  .pipeline-header p {
+    font-size: 12px;
+    color: var(--text-muted);
+    max-width: 460px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  /* INPUT BLOCK */
+  .input-block {
+    background: var(--blue-dark);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 0;
+  }
+
+  .input-block .label-col {
+    flex: 0 0 auto;
+  }
+
+  .input-block .step-eyebrow {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 3px;
+  }
+
+  .input-block .step-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+  }
+
+  .input-block .step-sub {
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    margin-top: 2px;
+  }
+
+  .doc-icons {
+    display: flex;
+    gap: 8px;
+    flex: 1;
+    justify-content: flex-end;
+  }
+
+  .doc-icon {
+    width: 42px;
+    height: 54px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .doc-icon::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 12px; height: 12px;
+    background: rgba(255,255,255,0.25);
+    clip-path: polygon(0 0, 100% 0, 100% 100%);
+  }
+
+  .doc-lines {
+    margin: 16px 6px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .doc-line {
+    height: 2px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 1px;
+  }
+
+  .doc-line.short { width: 60%; }
+  .doc-line.shorter { width: 40%; }
+
+  .doc-label {
+    position: absolute;
+    bottom: 5px;
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 8px;
+    font-weight: 600;
+    color: var(--teal);
+    letter-spacing: 0.05em;
+  }
+
+  .doc-icon.has-table .doc-lines {
+    display: none;
+  }
+
+  .doc-icon.has-table::after {
+    content: '';
+    position: absolute;
+    top: 14px; left: 5px; right: 5px;
+    height: 22px;
+    background: repeating-linear-gradient(
+      transparent, transparent 4px,
+      rgba(255,255,255,0.15) 4px, rgba(255,255,255,0.15) 5px
+    );
+    border-top: 1px solid rgba(255,255,255,0.3);
+  }
+
+  /* ARROW CONNECTOR */
+  .arrow-connector {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 32px;
+    position: relative;
+  }
+
+  .arrow-connector::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: 24px;
+    background: linear-gradient(to bottom, var(--teal), var(--green));
+  }
+
+  .arrow-connector::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid var(--green);
+  }
+
+  /* STEP CARDS */
+  .step-card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    border: 1.5px solid var(--teal-light);
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .step-card:hover {
+    border-color: var(--teal);
+    box-shadow: 0 2px 16px rgba(6,182,246,0.10);
+  }
+
+  .step-card.active {
+    border-color: var(--green);
+    box-shadow: 0 2px 20px rgba(137,174,16,0.13);
+  }
+
+  .step-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--teal-light);
+  }
+
+  .step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .step-num.green { background: var(--green); color: #fff; }
+  .step-num.teal  { background: var(--teal);  color: var(--blue-dark); }
+  .step-num.blue  { background: var(--blue);  color: #fff; }
+
+  .step-header-text { flex: 1; }
+
+  .step-eyebrow {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 1px;
+  }
+
+  .step-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--blue-dark);
+  }
+
+  .step-toggle {
+    font-size: 16px;
+    color: var(--text-muted);
+    transition: transform 0.25s;
+    user-select: none;
+  }
+
+  .step-card.active .step-toggle { transform: rotate(180deg); }
+
+  .step-body {
+    display: none;
+    padding: 0;
+  }
+
+  .step-card.active .step-body {
+    display: block;
+  }
+
+  /* STEP BODY CONTENT */
+  .step-visual {
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--teal-light);
+  }
+
+  .step-desc {
+    padding: 12px 18px;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.7;
+    border-bottom: 1px solid var(--teal-light);
+  }
+
+  .step-tags {
+    padding: 10px 18px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .tag {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    padding: 3px 9px;
+    border-radius: 20px;
+    border: 1px solid;
+  }
+
+  .tag.green { color: var(--green); border-color: var(--green-light); background: var(--green-light); }
+  .tag.teal  { color: #2a7f8a;     border-color: var(--teal-light);  background: var(--teal-light);  }
+  .tag.blue  { color: #0570a0;     border-color: #cbeef9;            background: #cbeef9;            }
+
+  /* ---- STEP 1: PREPROCESSING VISUAL ---- */
+  .preprocess-visual {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .pdf-raw {
+    flex: 0 0 auto;
+    width: 80px;
+  }
+
+  .pdf-raw-box {
+    width: 76px;
+    height: 96px;
+    background: #f5f5f0;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 8px 6px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .pdf-raw-box::before {
+    content: 'PDF';
+    position: absolute;
+    top: 4px; right: 5px;
+    font-size: 8px;
+    font-weight: 700;
+    color: #c0392b;
+    letter-spacing: 0.04em;
+  }
+
+  .pdf-raw-line {
+    height: 2px;
+    background: #ccc;
+    border-radius: 1px;
+    margin-bottom: 3px;
+  }
+
+  .pdf-raw-line.v { width: 100%; }
+  .pdf-raw-line.s { width: 65%; }
+  .pdf-raw-line.xs { width: 45%; }
+
+  .pdf-raw-img {
+    width: 100%;
+    height: 20px;
+    background: #dde8dd;
+    border-radius: 2px;
+    margin-top: 4px;
+  }
+
+  .transform-arrow {
+    display: flex;
+    align-items: center;
+    padding-top: 32px;
+    color: var(--teal);
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .parsed-tree {
+    flex: 1;
+    font-size: 11px;
+    font-family: 'DM Mono', monospace;
+    line-height: 1.7;
+    color: var(--text-muted);
+  }
+
+  .parsed-tree .node-line {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .parsed-tree .indent { padding-left: 14px; }
+  .parsed-tree .indent2 { padding-left: 28px; }
+
+  /* Folder-style connector lines for parsed-tree */
+  .parsed-tree { position: relative; }
+  .parsed-tree .node-line { position: relative; padding-top: 6px; padding-bottom: 6px; }
+
+  /* vertical line for first indent level */
+  .parsed-tree .node-line.indent::before {
+    content: '';
+    position: absolute;
+    left: 6px; /* relative to the node-line */
+    top: 0;
+    bottom: 15px;
+    width: 1px;
+    background: rgba(21,55,67,0.06);
+  }
+  /* horizontal connector from vertical line to the badge */
+  .parsed-tree .node-line.indent::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 1px;
+    background: rgba(21,55,67,0.06);
+  }
+
+  /* vertical line for second indent level */
+  .parsed-tree .node-line.indent2::before {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 0;
+    bottom: 15px;
+    width: 1px;
+    background: rgba(21,55,67,0.06);
+  }
+  .parsed-tree .node-line.indent2::after {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 1px;
+    background: rgba(21,55,67,0.06);
+  }
+
+  .tree-badge {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .tree-badge.h { background: #e8f2c0; color: var(--green); }
+  .tree-badge.p { background: #cbeef9; color: #0570a0; }
+  .tree-badge.t { background: #d4eff2; color: #2a7f8a; }
+  .tree-badge.i { background: #f0e8d0; color: #8a5a10; }
+
+  /* ---- STEP 2: RETRIEVAL VISUAL ---- */
+  .retrieval-visual {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+
+  .query-col {
+    flex: 0 0 auto;
+    width: 120px;
+  }
+
+  .query-bubble {
+    background: var(--blue-dark);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 7px 10px;
+    border-radius: 8px;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+  .query-label {
+    font-size: 9px;
+    text-align: center;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .retrieval-arrow {
+    display: flex;
+    align-items: center;
+    padding-top: 10px;
+    color: var(--teal);
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .concepts-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .concept-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .concept-bar {
+    height: 8px;
+    border-radius: 4px;
+    background: var(--teal);
+    transition: width 0.5s ease;
+    flex-shrink: 0;
+  }
+
+  .concept-label {
+    font-size: 11px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .concept-score {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: 'DM Mono', monospace;
+    margin-left: auto;
+  }
+
+  /* ---- STEP 3: QUOTE EXTRACTION VISUAL ---- */
+  .quote-visual {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+
+  .doc-preview {
+    flex: 0 0 110px;
+    background: #fafaf8;
+    border: 1px solid #e0e0d8;
+    border-radius: 6px;
+    padding: 8px;
+  }
+
+  .doc-preview-page {
+    font-size: 8px;
+    color: var(--text-muted);
+    text-align: right;
+    margin-bottom: 4px;
+  }
+
+  .doc-preview-line {
+    height: 2px;
+    background: #ddd;
+    border-radius: 1px;
+    margin-bottom: 3px;
+  }
+
+  .doc-preview-line.highlighted {
+    background: var(--green);
+    height: 3px;
+  }
+
+  .doc-preview-line.highlighted2 {
+    background: var(--green-mid);
+    height: 3px;
+  }
+
+  .quote-boxes-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .quote-box {
+    background: var(--green-light);
+    border: 1px solid var(--green);
+    border-left: 3px solid var(--green);
+    border-radius: 6px;
+    padding: 8px 10px;
+    position: relative;
+  }
+
+  .quote-box .quote-mark {
+    font-size: 20px;
+    color: var(--green);
+    line-height: 0.8;
+    font-family: Georgia, serif;
+    display: inline-block;
+    margin-bottom: 2px;
+  }
+
+  .quote-box .quote-text {
+    font-size: 10px;
+    color: var(--blue-dark);
+    line-height: 1.5;
+    font-style: italic;
+  }
+
+  .quote-box .quote-meta {
+    margin-top: 4px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .quote-box .page-ref {
+    font-size: 9px;
+    color: var(--text-muted);
+    font-family: 'DM Mono', monospace;
+    background: rgba(255,255,255,0.7);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .quote-box .verified {
+    font-size: 9px;
+    color: #3a8a3a;
+    font-weight: 600;
+    background: rgba(255,255,255,0.7);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  /* ---- STEP 4: CLASSIFICATION VISUAL ---- */
+  .classif-visual {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+
+  .classif-quote {
+    flex: 0 0 auto;
+    width: 110px;
+  }
+
+  .classif-quote-box {
+    background: var(--green-light);
+    border: 1px solid var(--green);
+    border-radius: 6px;
+    padding: 7px 8px;
+    font-size: 9px;
+    font-style: italic;
+    color: var(--blue-dark);
+    line-height: 1.5;
+    margin-bottom: 4px;
+  }
+
+  .classif-label {
+    font-size: 9px;
+    text-align: center;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+  }
+
+  .classif-arrow {
+    display: flex;
+    align-items: center;
+    padding-top: 14px;
+    flex-shrink: 0;
+  }
+
+  .taxonomy-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .taxon-row {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .taxon-label {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    padding-left: 2px;
+  }
+
+  .taxon-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .taxon-tag {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 3px 9px;
+    border-radius: 20px;
+    border: 1px solid;
+    cursor: default;
+    transition: background 0.15s;
+  }
+
+  .taxon-tag.active-tag {
+    transform: scale(1.05);
+  }
+
+  .taxon-tag.sector { background: var(--teal-light); color: #1a6470; border-color: var(--teal); }
+  .taxon-tag.type   { background: #e8f2c0; color: #4a6a00; border-color: var(--green); }
+  .taxon-tag.cond   { background: #fdf0d5; color: #7a4d00; border-color: #e8b840; }
+
+  /* ---- OUTPUT BLOCK ---- */
+  .output-block {
+    background: var(--blue-dark);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .output-block::before {
+    content: '';
+    position: absolute;
+    right: -20px; top: -20px;
+    width: 120px; height: 120px;
+    border-radius: 50%;
+    background: rgba(6,182,246,0.07);
+  }
+
+  .output-left { flex: 1; }
+
+  .output-eyebrow {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 3px;
+  }
+
+  .output-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+
+  .output-sub {
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+  }
+
+  .output-stats {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .stat-chip {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    padding: 6px 10px;
+    text-align: center;
+  }
+
+  .stat-chip .stat-val {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--green-mid);
+    line-height: 1;
+  }
+
+  .stat-chip .stat-lbl {
+    font-size: 9px;
+    color: rgba(255,255,255,0.45);
+    margin-top: 2px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .dashboard-preview {
+    flex: 0 0 140px;
+    height: 90px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    padding: 8px;
+    position: relative;
+  }
+
+  .dash-bar-group {
+    display: flex;
+    gap: 4px;
+    align-items: flex-end;
+    height: 50px;
+    margin-bottom: 4px;
+  }
+
+  .dash-bar {
+    flex: 1;
+    background: var(--teal);
+    border-radius: 2px 2px 0 0;
+    opacity: 0.7;
+  }
+
+  .dash-bar.accent { background: var(--green-mid); opacity: 1; }
+
+  .dash-filter-row {
+    display: flex;
+    gap: 3px;
+  }
+
+  .dash-filter {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.2);
+  }
+
+  .dash-label {
+    position: absolute;
+    bottom: 6px; right: 8px;
+    font-size: 8px;
+    color: rgba(255,255,255,0.4);
+    font-family: 'DM Mono', monospace;
+  }
+</style>
+
+<div class="wrap">
+
+  <div class="pipeline-header">
+    <div class="eyebrow">NDC Transport Tracker &bull; AI-powered analysis pipeline</div>
+    <h1>Automated analysis of national climate policy documents</h1>
+    <p>A 4-step AI pipeline that extracts, retrieves, and classifies transport-relevant commitments from Nationally Determined Contributions (NDCs) submitted to the UNFCCC.</p>
+  </div>
+
+  <!-- INPUT DOCUMENTS -->
+  <div class="input-block">
+    <div class="label-col">
+      <div class="step-eyebrow">Input</div>
+      <div class="step-title">Policy documents</div>
+      <div class="step-sub">NDCs &bull; LTS &bull; UNFCCC submissions</div>
+    </div>
+    <div class="doc-icons">
+      <div class="doc-icon">
+        <div class="doc-lines">
+          <div class="doc-line v"></div>
+          <div class="doc-line s"></div>
+          <div class="doc-line v"></div>
+          <div class="doc-line xs"></div>
+          <div class="doc-line v"></div>
+        </div>
+        <div class="doc-label">NDC</div>
+      </div>
+      <div class="doc-icon has-table">
+        <div class="doc-label">LTS</div>
+      </div>
+      <div class="doc-icon">
+        <div class="doc-lines">
+          <div class="doc-line v"></div>
+          <div class="doc-line s"></div>
+          <div class="doc-line v"></div>
+          <div class="doc-line s"></div>
+        </div>
+        <div class="doc-label">Other</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 1 -->
+  <div class="arrow-connector"></div>
+  <div class="step-card active" id="card1" onclick="toggleCard('card1')">
+    <div class="step-header">
+      <div class="step-num green">1</div>
+      <div class="step-header-text">
+        <div class="step-eyebrow">Document parsing</div>
+        <h3>Preprocessing &amp; structure detection</h3>
+      </div>
+      <div class="step-toggle">▾</div>
+    </div>
+    <div class="step-body">
+      <div class="step-visual">
+        <div class="preprocess-visual">
+          <div class="pdf-raw">
+            <div class="pdf-raw-box">
+              <div class="pdf-raw-line s"></div>
+              <div class="pdf-raw-line s"></div>
+              <div class="pdf-raw-line v"></div>
+              <div class="pdf-raw-line v"></div>
+              <div class="pdf-raw-line xs"></div>
+              <div class="pdf-raw-img"></div>
+              <div class="pdf-raw-line s" style="margin-top:4px"></div>
+              <div class="pdf-raw-line v"></div>
+              <div class="pdf-raw-line v"></div>
+              <div class="pdf-raw-line xs"></div>
+            </div>
+            <div style="font-size:9px;text-align:center;color:var(--text-muted);margin-top:4px">raw PDF</div>
+          </div>
+          <div class="transform-arrow">→</div>
+          <div class="parsed-tree">
+            <div class="node-line"><span class="tree-badge h">H1</span> <span>Chapter title</span></div>
+            <div class="node-line indent"><span class="tree-badge h">H2</span> <span>Section heading</span></div>
+            <div class="node-line indent2"><span class="tree-badge p">¶</span> <span>Paragraph text block</span></div>
+            <div class="node-line indent2"><span class="tree-badge t">⊞</span> <span>Data table</span></div>
+            <div class="node-line indent2"><span class="tree-badge i">⬜</span> <span>Image / chart</span></div>
+            <div class="node-line indent"><span class="tree-badge h">H2</span> <span>Next section</span></div>
+            <div class="node-line indent2"><span class="tree-badge p">¶</span> <span>Paragraph text block</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="step-desc">
+        Each PDF is decomposed into its individual structural elements: text blocks, tables, images, titles, and headings. The open-source tool Unstructured-IO is applied to reconstructs the logical document hierarchy using OCR, so all subsequent steps operate on organized, context-aware content rather than raw text.
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="arrow-connector"></div>
+  <div class="step-card" id="card2" onclick="toggleCard('card2')">
+    <div class="step-header">
+      <div class="step-num teal">2</div>
+      <div class="step-header-text">
+        <div class="step-eyebrow">Semantic search</div>
+        <h3>Retrieval of relevant passages</h3>
+      </div>
+      <div class="step-toggle">▾</div>
+    </div>
+    <div class="step-body">
+      <div class="step-visual">
+        <div class="retrieval-visual">
+          <div class="query-col">
+            <div class="query-bubble">"transport,<br>vehicles,<br>emissions,<br>targets,<br>..."</div>
+            <div class="query-label">search query</div>
+          </div>
+          <div class="retrieval-arrow">→</div>
+          <div class="concepts-col" id="concept-bars">
+            <div style="font-size:9px;color:var(--text-muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.07em;">Matching passages by relevance score</div>
+            <div class="concept-row">
+              <div class="concept-bar" style="width:62%;background:var(--green)"></div>
+              <div class="concept-label">"GHG reduction targets..."</div>
+              <div class="concept-score">0.92</div>
+            </div>
+            <div class="concept-row">
+              <div class="concept-bar" style="width:52%;background:var(--green)"></div>
+              <div class="concept-label">"Public transport measures..."</div>
+              <div class="concept-score">0.84</div>
+            </div>
+            <div class="concept-row">
+              <div class="concept-bar" style="width:48%;background:var(--green-mid)"></div>
+              <div class="concept-label">"Fuel efficiency standards..."</div>
+              <div class="concept-score">0.78</div>
+            </div>
+            <div style="border-top:1px dashed rgba(0,0,0,0.22);margin:6px 0 8px 0;"></div>
+            <div class="concept-row">
+              <div class="concept-bar" style="width:40%;background:var(--teal)"></div>
+              <div class="concept-label">"Renewable energy goals..."</div>
+              <div class="concept-score">0.69</div>
+            </div>
+            <div class="concept-row">
+              <div class="concept-bar" style="width:32%;background:#b0dde3"></div>
+              <div class="concept-label">"Green buildings..."</div>
+              <div class="concept-score">0.56</div>
+            </div>
+            <div class="concept-row">
+              <div class="concept-bar" style="width:28%;background:#cde9ec"></div>
+              <div class="concept-label">"Climate finance..."</div>
+              <div class="concept-score">0.41</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="step-desc">
+        The system searches all document elements using semantic similarity rather than keyword matching. Text is converted into numeric vector representations, meaning a query for "targets" also surfaces passages mentioning "goals" or "commitments". This allows for more comprehensive retrieval of relevant content, even when different terminology is used across documents.
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="arrow-connector"></div>
+  <div class="step-card" id="card3" onclick="toggleCard('card3')">
+    <div class="step-header">
+      <div class="step-num green">3</div>
+      <div class="step-header-text">
+        <div class="step-eyebrow">Exact wording &amp; traceability</div>
+        <h3>Quote extraction &amp; verification</h3>
+      </div>
+      <div class="step-toggle">▾</div>
+    </div>
+    <div class="step-body">
+      <div class="step-visual">
+        <div class="quote-visual">
+          <div class="doc-preview">
+            <div class="doc-preview-page">p. 14</div>
+            <div class="doc-preview-line"></div>
+            <div class="doc-preview-line s"></div>
+            <div class="doc-preview-line highlighted"></div>
+            <div class="doc-preview-line highlighted2"></div>
+            <div class="doc-preview-line"></div>
+            <div class="doc-preview-line s"></div>
+            <div class="doc-preview-line"></div>
+            <div class="doc-preview-line highlighted"></div>
+            <div class="doc-preview-line"></div>
+            <div class="doc-preview-line s"></div>
+            <div class="doc-preview-line"></div>
+            <div class="query-label">test passage</div>
+          </div>
+          <div style="display:flex;align-items:center;padding-top:10px;font-size:16px;color:var(--teal);flex-shrink:0">→</div>
+          <div class="quote-boxes-col">
+            <div class="quote-box">
+              <div class="quote-mark">"</div>
+              <div class="quote-text">Reduce transport sector emissions by 30% below 2010 levels by 2030…"</div>
+              <div class="quote-meta">
+                <div class="page-ref">p. 14</div>
+                <div class="verified">✓ verified</div>
+              </div>
+            </div>
+            <div class="quote-box" style="opacity:0.65">
+              <div class="quote-mark">"</div>
+              <div class="quote-text">Expand urban rail network to cover 80% of metropolitan population…"</div>
+              <div class="quote-meta">
+                <div class="page-ref">p. 14</div>
+                <div class="verified">✓ verified</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="step-desc">
+        Using large language models, the system extracts exact quotes from relevant passages, preserving the original wording and a link to the source page. A verification step then checks that each extracted quote is found verbatim in the original document, preventing the extraction of hallucinated text.
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 4 -->
+  <div class="arrow-connector"></div>
+  <div class="step-card" id="card4" onclick="toggleCard('card4')">
+    <div class="step-header">
+      <div class="step-num blue">4</div>
+      <div class="step-header-text">
+        <div class="step-eyebrow">AI-assisted taxonomy</div>
+        <h3>Classification by category</h3>
+      </div>
+      <div class="step-toggle">▾</div>
+    </div>
+    <div class="step-body">
+      <div class="step-visual">
+        <div class="classif-visual">
+          <div class="classif-quote">
+            <div class="classif-quote-box">"Reduce transport sector emissions by 30% below 2010 levels by 2030…"</div>
+            <div class="classif-label">extracted quote</div>
+          </div>
+          <div class="classif-arrow" style="color:var(--teal);font-size:16px;padding-top:14px">→</div>
+          <div class="taxonomy-col">
+            <div class="taxon-row">
+              <div class="taxon-label">Sector</div>
+              <div class="taxon-tags">
+                <span class="taxon-tag sector active-tag">Transport</span>
+                <span class="taxon-tag sector" style="opacity:0.4">Energy</span>
+                <span class="taxon-tag sector" style="opacity:0.4">Economy-wide</span>
+              </div>
+            </div>
+            <div class="taxon-row">
+              <div class="taxon-label">Type</div>
+              <div class="taxon-tags">
+                <span class="taxon-tag type active-tag">Target</span>
+                <span class="taxon-tag type" style="opacity:0.4">Measure</span>
+              </div>
+            </div>
+            <div class="taxon-row">
+              <div class="taxon-label">Climate action</div>
+              <div class="taxon-tags">
+                <span class="taxon-tag type active-tag">Mitigation</span>
+                <span class="taxon-tag type" style="opacity:0.4">Adaptation</span>
+                <span class="taxon-tag type" style="opacity:0.4">Net-zero</span>
+              </div>
+            </div>
+            <div class="taxon-row">
+              <div class="taxon-label">Conditionality</div>
+              <div class="taxon-tags">
+                <span class="taxon-tag cond" style="opacity:0.4">Conditional</span>
+                <span class="taxon-tag cond active-tag">Unconditional</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="step-desc">
+        An efficient general knowledge LLM (GPT-4o-mini) categorizes each quote using a taxonomy defined by the analyst team. Learning (in -context) from detailed definitions and examples, the model distinguishes between sectors, targets from measures, mitigation from adaptation, and flags conditional commitments that depend on external support.
+      </div>
+    </div>
+  </div>
+
+  <!-- OUTPUT -->
+  <div class="arrow-connector"></div>
+  <div class="output-block">
+    <div class="output-left">
+      <div class="output-eyebrow">Output</div>
+      <div class="output-title">NDC Transport Tracker</div>
+      <div class="output-sub">Structured climate policy insights across 195 countries</div>
+      <div class="output-stats">
+        <div class="stat-chip">
+          <div class="stat-val">195</div>
+          <div class="stat-lbl">Countries</div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-val">600+</div>
+          <div class="stat-lbl">Documents</div>
+        </div>
+        <div class="stat-chip">
+          <div class="stat-val">2015–</div>
+          <div class="stat-lbl">Coverage</div>
+        </div>
+      </div>
+    </div>
+    <div class="dashboard-preview">
+      <div class="dash-bar-group">
+        <div class="dash-bar" style="height:35%"></div>
+        <div class="dash-bar accent" style="height:75%"></div>
+        <div class="dash-bar" style="height:55%"></div>
+        <div class="dash-bar" style="height:90%"></div>
+        <div class="dash-bar" style="height:40%"></div>
+        <div class="dash-bar accent" style="height:65%"></div>
+        <div class="dash-bar" style="height:50%"></div>
+      </div>
+      <div class="dash-filter-row">
+        <div class="dash-filter" style="width:30%"></div>
+        <div class="dash-filter" style="width:20%"></div>
+        <div class="dash-filter" style="width:15%"></div>
+      </div>
+      <div class="dash-label"><a href="https://changing-transport.org/tracker/" style="color:#bfeec9;">changing-transport.org</a></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function toggleCard(id) {
+  var cards = ['card1','card2','card3','card4'];
+  var clicked = document.getElementById(id);
+  var wasActive = clicked.classList.contains('active');
+  cards.forEach(function(c) {
+    document.getElementById(c).classList.remove('active');
+  });
+  if (!wasActive) {
+    clicked.classList.add('active');
+  }
+}
+</script>
