@@ -2,87 +2,2288 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Transport Policy Miner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+    :root {
+      --green: #89AE10;
+      --green-light: #e8f2c0;
+      --green-mid: #b3d040;
+      --teal: #83C8D1;
+      --teal-light: #d4eff2;
+      --blue: #06B6F6;
+      --blue-dark: #153743;
+      --blue-light: #E0F6FE;
+      --bg: #E0F6FE;
+      --card-bg: #ffffff;
+      --text: #153743;
+      --text-muted: #4a7080;
+      --arrow: #83C8D1;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body, .wrap {
+      font-family: 'DM Sans', sans-serif;
+      background: transparent;
+      color: var(--text);
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: 740px;
+      margin: 0 auto;
+      padding: 28px 20px 36px;
+    }
+
+    .pipeline-header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .pipeline-header .eyebrow {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .pipeline-header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--blue-dark);
+      line-height: 1.3;
+      margin-bottom: 6px;
+    }
+
+    .pipeline-header p {
+      font-size: 12px;
+      color: var(--text-muted);
+      max-width: 460px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* INPUT BLOCK */
+    .input-block {
+      background: var(--blue-dark);
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 0;
+    }
+
+    .input-block .label-col {
+      flex: 0 0 auto;
+    }
+
+    .input-block .step-eyebrow {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--teal);
+      margin-bottom: 3px;
+    }
+
+    .input-block .step-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .input-block .step-sub {
+      font-size: 11px;
+      color: rgba(255,255,255,0.55);
+      margin-top: 2px;
+    }
+
+    .doc-icons {
+      display: flex;
+      gap: 8px;
+      flex: 1;
+      justify-content: flex-end;
+    }
+
+    .doc-icon {
+      width: 42px;
+      height: 54px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 6px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .doc-icon::before {
+      content: '';
+      position: absolute;
+      top: 0; right: 0;
+      width: 12px; height: 12px;
+      background: rgba(255,255,255,0.25);
+      clip-path: polygon(0 0, 100% 0, 100% 100%);
+    }
+
+    .doc-lines {
+      margin: 16px 6px 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .doc-line {
+      height: 2px;
+      background: rgba(255,255,255,0.3);
+      border-radius: 1px;
+    }
+
+    .doc-line.short { width: 60%; }
+    .doc-line.shorter { width: 40%; }
+
+    .doc-label {
+      position: absolute;
+      bottom: 5px;
+      left: 0; right: 0;
+      text-align: center;
+      font-size: 8px;
+      font-weight: 600;
+      color: var(--teal);
+      letter-spacing: 0.05em;
+    }
+
+    .doc-icon.has-table .doc-lines {
+      display: none;
+    }
+
+    .doc-icon.has-table::after {
+      content: '';
+      position: absolute;
+      top: 14px; left: 5px; right: 5px;
+      height: 22px;
+      background: repeating-linear-gradient(
+        transparent, transparent 4px,
+        rgba(255,255,255,0.15) 4px, rgba(255,255,255,0.15) 5px
+      );
+      border-top: 1px solid rgba(255,255,255,0.3);
+    }
+
+    /* ARROW CONNECTOR */
+    .arrow-connector {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 32px;
+      position: relative;
+    }
+
+    .arrow-connector::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 2px;
+      height: 24px;
+      background: linear-gradient(to bottom, var(--teal), var(--green));
+    }
+
+    .arrow-connector::after {
+      content: '';
+      position: absolute;
+      bottom: 2px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 8px solid var(--green);
+    }
+
+    /* STEP CARDS */
+    .step-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1.5px solid var(--teal-light);
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .step-card:hover {
+      border-color: var(--teal);
+      box-shadow: 0 2px 16px rgba(6,182,246,0.10);
+    }
+
+    .step-card.active {
+      border-color: var(--green);
+      box-shadow: 0 2px 20px rgba(137,174,16,0.13);
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--teal-light);
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .step-num.green { background: var(--green); color: #fff; }
+    .step-num.teal  { background: var(--teal);  color: var(--blue-dark); }
+    .step-num.blue  { background: var(--blue);  color: #fff; }
+
+    .step-header-text { flex: 1; }
+
+    .step-eyebrow {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 1px;
+    }
+
+    .step-header h3 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--blue-dark);
+    }
+
+    .step-toggle {
+      font-size: 16px;
+      color: var(--text-muted);
+      transition: transform 0.25s;
+      user-select: none;
+    }
+
+    .step-card.active .step-toggle { transform: rotate(180deg); }
+
+    .step-body {
+      display: none;
+      padding: 0;
+    }
+
+    .step-card.active .step-body {
+      display: block;
+    }
+
+    /* STEP BODY CONTENT */
+    .step-visual {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--teal-light);
+    }
+
+    .step-desc {
+      padding: 12px 18px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.7;
+      border-bottom: 1px solid var(--teal-light);
+    }
+
+    .step-tags {
+      padding: 10px 18px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tag {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      padding: 3px 9px;
+      border-radius: 20px;
+      border: 1px solid;
+    }
+
+    .tag.green { color: var(--green); border-color: var(--green-light); background: var(--green-light); }
+    .tag.teal  { color: #2a7f8a;     border-color: var(--teal-light);  background: var(--teal-light);  }
+    .tag.blue  { color: #0570a0;     border-color: #cbeef9;            background: #cbeef9;            }
+
+    /* ---- STEP 1: PREPROCESSING VISUAL ---- */
+    .preprocess-visual {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .pdf-raw {
+      flex: 0 0 auto;
+      width: 80px;
+    }
+
+    .pdf-raw-box {
+      width: 76px;
+      height: 96px;
+      background: #f5f5f0;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 8px 6px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pdf-raw-box::before {
+      content: 'PDF';
+      position: absolute;
+      top: 4px; right: 5px;
+      font-size: 8px;
+      font-weight: 700;
+      color: #c0392b;
+      letter-spacing: 0.04em;
+    }
+
+    .pdf-raw-line {
+      height: 2px;
+      background: #ccc;
+      border-radius: 1px;
+      margin-bottom: 3px;
+    }
+
+    .pdf-raw-line.v { width: 100%; }
+    .pdf-raw-line.s { width: 65%; }
+    .pdf-raw-line.xs { width: 45%; }
+
+    .pdf-raw-img {
+      width: 100%;
+      height: 20px;
+      background: #dde8dd;
+      border-radius: 2px;
+      margin-top: 4px;
+    }
+
+    .transform-arrow {
+      display: flex;
+      align-items: center;
+      padding-top: 32px;
+      color: var(--teal);
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .parsed-tree {
+      flex: 1;
+      font-size: 11px;
+      font-family: 'DM Mono', monospace;
+      line-height: 1.7;
+      color: var(--text-muted);
+    }
+
+    .parsed-tree .node-line {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .parsed-tree .indent { padding-left: 14px; }
+    .parsed-tree .indent2 { padding-left: 28px; }
+
+    /* Folder-style connector lines for parsed-tree */
+    .parsed-tree { position: relative; }
+    .parsed-tree .node-line { position: relative; padding-top: 6px; padding-bottom: 6px; }
+
+    /* vertical line for first indent level */
+    .parsed-tree .node-line.indent::before {
+      content: '';
+      position: absolute;
+      left: 6px; /* relative to the node-line */
+      top: 0;
+      bottom: 15px;
+      width: 1px;
+      background: rgba(21,55,67,0.06);
+    }
+    /* horizontal connector from vertical line to the badge */
+    .parsed-tree .node-line.indent::after {
+      content: '';
+      position: absolute;
+      left: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 8px;
+      height: 1px;
+      background: rgba(21,55,67,0.06);
+    }
+
+    /* vertical line for second indent level */
+    .parsed-tree .node-line.indent2::before {
+      content: '';
+      position: absolute;
+      left: 20px;
+      top: 0;
+      bottom: 15px;
+      width: 1px;
+      background: rgba(21,55,67,0.06);
+    }
+    .parsed-tree .node-line.indent2::after {
+      content: '';
+      position: absolute;
+      left: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 8px;
+      height: 1px;
+      background: rgba(21,55,67,0.06);
+    }
+
+    .tree-badge {
+      font-size: 9px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 3px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .tree-badge.h { background: #e8f2c0; color: var(--green); }
+    .tree-badge.p { background: #cbeef9; color: #0570a0; }
+    .tree-badge.t { background: #d4eff2; color: #2a7f8a; }
+    .tree-badge.i { background: #f0e8d0; color: #8a5a10; }
+
+    /* ---- STEP 2: RETRIEVAL VISUAL ---- */
+    .retrieval-visual {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .query-col {
+      flex: 0 0 auto;
+      width: 120px;
+    }
+
+    .query-bubble {
+      background: var(--blue-dark);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 7px 10px;
+      border-radius: 8px;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .query-label {
+      font-size: 9px;
+      text-align: center;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .retrieval-arrow {
+      display: flex;
+      align-items: center;
+      padding-top: 10px;
+      color: var(--teal);
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .concepts-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .concept-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .concept-bar {
+      height: 8px;
+      border-radius: 4px;
+      background: var(--teal);
+      transition: width 0.5s ease;
+      flex-shrink: 0;
+    }
+
+    .concept-label {
+      font-size: 11px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .concept-score {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: 'DM Mono', monospace;
+      margin-left: auto;
+    }
+
+    /* ---- STEP 3: QUOTE EXTRACTION VISUAL ---- */
+    .quote-visual {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .doc-preview {
+      flex: 0 0 110px;
+      background: #fafaf8;
+      border: 1px solid #e0e0d8;
+      border-radius: 6px;
+      padding: 8px;
+    }
+
+    .doc-preview-page {
+      font-size: 8px;
+      color: var(--text-muted);
+      text-align: right;
+      margin-bottom: 4px;
+    }
+
+    .doc-preview-line {
+      height: 2px;
+      background: #ddd;
+      border-radius: 1px;
+      margin-bottom: 3px;
+    }
+
+    .doc-preview-line.highlighted {
+      background: var(--green);
+      height: 3px;
+    }
+
+    .doc-preview-line.highlighted2 {
+      background: var(--green-mid);
+      height: 3px;
+    }
+
+    .quote-boxes-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .quote-box {
+      background: var(--green-light);
+      border: 1px solid var(--green);
+      border-left: 3px solid var(--green);
+      border-radius: 6px;
+      padding: 8px 10px;
+      position: relative;
+    }
+
+    .quote-box .quote-mark {
+      font-size: 20px;
+      color: var(--green);
+      line-height: 0.8;
+      font-family: Georgia, serif;
+      display: inline-block;
+      margin-bottom: 2px;
+    }
+
+    .quote-box .quote-text {
+      font-size: 10px;
+      color: var(--blue-dark);
+      line-height: 1.5;
+      font-style: italic;
+    }
+
+    .quote-box .quote-meta {
+      margin-top: 4px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .quote-box .page-ref {
+      font-size: 9px;
+      color: var(--text-muted);
+      font-family: 'DM Mono', monospace;
+      background: rgba(255,255,255,0.7);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    .quote-box .verified {
+      font-size: 9px;
+      color: #3a8a3a;
+      font-weight: 600;
+      background: rgba(255,255,255,0.7);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    /* ---- STEP 4: CLASSIFICATION VISUAL ---- */
+    .classif-visual {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+
+    .classif-quote {
+      flex: 0 0 auto;
+      width: 110px;
+    }
+
+    .classif-quote-box {
+      background: var(--green-light);
+      border: 1px solid var(--green);
+      border-radius: 6px;
+      padding: 7px 8px;
+      font-size: 9px;
+      font-style: italic;
+      color: var(--blue-dark);
+      line-height: 1.5;
+      margin-bottom: 4px;
+    }
+
+    .classif-label {
+      font-size: 9px;
+      text-align: center;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+    }
+
+    .classif-arrow {
+      display: flex;
+      align-items: center;
+      padding-top: 14px;
+      flex-shrink: 0;
+    }
+
+    .taxonomy-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .taxon-row {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .taxon-label {
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-muted);
+      padding-left: 2px;
+    }
+
+    .taxon-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .taxon-tag {
+      font-size: 10px;
+      font-weight: 500;
+      padding: 3px 9px;
+      border-radius: 20px;
+      border: 1px solid;
+      cursor: default;
+      transition: background 0.15s;
+    }
+
+    .taxon-tag.active-tag {
+      transform: scale(1.05);
+    }
+
+    .taxon-tag.sector { background: var(--teal-light); color: #1a6470; border-color: var(--teal); }
+    .taxon-tag.type   { background: #e8f2c0; color: #4a6a00; border-color: var(--green); }
+    .taxon-tag.cond   { background: #fdf0d5; color: #7a4d00; border-color: #e8b840; }
+
+    /* ---- OUTPUT BLOCK ---- */
+    .output-block {
+      background: var(--blue-dark);
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .output-block::before {
+      content: '';
+      position: absolute;
+      right: -20px; top: -20px;
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      background: rgba(6,182,246,0.07);
+    }
+
+    .output-left { flex: 1; }
+
+    .output-eyebrow {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--teal);
+      margin-bottom: 3px;
+    }
+
+    .output-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+
+    .output-sub {
+      font-size: 11px;
+      color: rgba(255,255,255,0.5);
+    }
+
+    .output-stats {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .stat-chip {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      padding: 6px 10px;
+      text-align: center;
+    }
+
+    .stat-chip .stat-val {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--green-mid);
+      line-height: 1;
+    }
+
+    .stat-chip .stat-lbl {
+      font-size: 9px;
+      color: rgba(255,255,255,0.45);
+      margin-top: 2px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .dashboard-preview {
+      flex: 0 0 140px;
+      height: 90px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 8px;
+      padding: 8px;
+      position: relative;
+    }
+
+    .dash-bar-group {
+      display: flex;
+      gap: 4px;
+      align-items: flex-end;
+      height: 50px;
+      margin-bottom: 4px;
+    }
+
+    .dash-bar {
+      flex: 1;
+      background: var(--teal);
+      border-radius: 2px 2px 0 0;
+      opacity: 0.7;
+    }
+
+    .dash-bar.accent { background: var(--green-mid); opacity: 1; }
+
+    .dash-filter-row {
+      display: flex;
+      gap: 3px;
+    }
+
+    .dash-filter {
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.2);
+    }
+
+    .dash-label {
+      position: absolute;
+      bottom: 6px; right: 8px;
+      font-size: 8px;
+      color: rgba(255,255,255,0.4);
+      font-family: 'DM Mono', monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      min-height: 100%;
+    }
+
+    body {
+      margin: 0;
+      font-family: 'DM Sans', sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(131, 200, 209, 0.28), transparent 28%),
+        radial-gradient(circle at top right, rgba(137, 174, 16, 0.14), transparent 22%),
+        linear-gradient(180deg, #f2fbfe 0%, #e8f8fd 100%);
+    }
+
+    .page-shell {
+      width: 100%;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 28px 18px 40px;
+    }
+
+    .hero {
+      text-align: center;
+      margin-bottom: 22px;
+    }
+
+    .hero .eyebrow {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .hero h1 {
+      font-size: clamp(24px, 3vw, 38px);
+      line-height: 1.15;
+      font-weight: 700;
+      color: var(--blue-dark);
+      margin-bottom: 10px;
+    }
+
+    .hero p {
+      max-width: 760px;
+      margin: 0 auto;
+      color: var(--text-muted);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .pipeline-strip {
+      display: grid;
+      grid-template-columns: 1.25fr 0.75fr;
+      gap: 18px;
+      margin-top: 24px;
+      margin-bottom: 18px;
+      align-items: stretch;
+    }
+
+    .pipeline-card {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(10px);
+      border: 1.5px solid rgba(131, 200, 209, 0.48);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .pipeline-card.dark {
+      background: linear-gradient(180deg, #183b49 0%, #153743 100%);
+      border-color: rgba(131, 200, 209, 0.20);
+      color: #fff;
+    }
+
+    .pipeline-card .card-head {
+      padding: 18px 20px 0;
+    }
+
+    .pipeline-card.dark .card-head {
+      padding-bottom: 0;
+    }
+
+    .step-eyebrow {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .pipeline-card.dark .step-eyebrow {
+      color: var(--teal);
+    }
+
+    .card-title-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .step-num {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex: 0 0 auto;
+    }
+
+    .step-num.green { background: var(--green); color: #fff; }
+    .step-num.teal { background: var(--teal); color: var(--blue-dark); }
+    .step-num.blue { background: var(--blue); color: #fff; }
+
+    .card-title-text h2,
+    .card-title-text h3 {
+      margin: 0;
+      color: inherit;
+      font-size: 18px;
+      line-height: 1.25;
+      font-weight: 700;
+    }
+
+    .card-title-text p {
+      margin: 4px 0 0;
+      color: inherit;
+      opacity: 0.72;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .hero-visual {
+      padding: 18px 20px 20px;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+    }
+
+    .doc-set {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+
+    .doc-icon {
+      width: 56px;
+      height: 72px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+      flex: 0 0 auto;
+    }
+
+    .doc-icon::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 13px;
+      height: 13px;
+      background: rgba(255, 255, 255, 0.22);
+      clip-path: polygon(0 0, 100% 0, 100% 100%);
+    }
+
+    .doc-lines {
+      position: absolute;
+      inset: 14px 7px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .doc-line {
+      height: 2px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.28);
+    }
+
+    .doc-line.short { width: 62%; }
+    .doc-line.shorter { width: 42%; }
+
+    .doc-icon.has-table::after {
+      content: '';
+      position: absolute;
+      top: 18px;
+      left: 7px;
+      right: 7px;
+      height: 30px;
+      border-top: 1px solid rgba(255, 255, 255, 0.25);
+      background: repeating-linear-gradient(
+        transparent,
+        transparent 5px,
+        rgba(255, 255, 255, 0.12) 5px,
+        rgba(255, 255, 255, 0.12) 6px
+      );
+    }
+
+    .doc-label {
+      position: absolute;
+      bottom: 6px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--teal);
+      text-transform: uppercase;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      background: rgba(131, 200, 209, 0.16);
+      color: var(--blue-dark);
+      border: 1px solid rgba(131, 200, 209, 0.4);
+      white-space: nowrap;
+    }
+
+    .form-panel {
+      padding: 20px;
+    }
+
+    .input-method-wrap {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .choice-card {
+      border: 1.5px solid var(--teal-light);
+      background: #fff;
+      border-radius: 14px;
+      padding: 14px 14px 12px;
+      cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+      min-height: 92px;
+      position: relative;
+    }
+
+    .choice-card:hover {
+      border-color: var(--teal);
+      box-shadow: var(--shadow-soft);
+      transform: translateY(-1px);
+    }
+
+    .choice-card.active {
+      border-color: var(--green);
+      box-shadow: 0 8px 24px rgba(137, 174, 16, 0.12);
+    }
+
+    .choice-card input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .choice-card .choice-kicker {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 5px;
+    }
+
+    .choice-card .choice-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--blue-dark);
+      margin-bottom: 4px;
+    }
+
+    .choice-card .choice-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .choice-card .choice-dot {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      border: 2px solid var(--teal);
+      background: transparent;
+    }
+
+    .choice-card.active .choice-dot {
+      border-color: var(--green);
+      background: var(--green);
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+
+    .field-card {
+      border: 1px solid var(--teal-light);
+      border-radius: 14px;
+      background: linear-gradient(180deg, #fff 0%, #fbfeff 100%);
+      padding: 16px;
+    }
+
+    .field-card label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--blue-dark);
+      margin-bottom: 8px;
+    }
+
+    .field-card .form-control {
+      border-radius: 10px;
+      border-color: #cfe7ee;
+      padding: 0.82rem 0.95rem;
+      box-shadow: none;
+    }
+
+    .field-card .form-control:focus {
+      border-color: var(--teal);
+      box-shadow: 0 0 0 0.2rem rgba(131, 200, 209, 0.18);
+    }
+
+    .support-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .support-row .hint-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--green-light);
+      color: #4a6a00;
+      border: 1px solid rgba(137, 174, 16, 0.18);
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+    }
+
+    .support-row a {
+      color: var(--blue-dark);
+      text-decoration: none;
+      border-bottom: 1px dashed rgba(21, 55, 67, 0.35);
+    }
+
+    .support-row a:hover {
+      color: var(--green);
+      border-bottom-color: var(--green);
+    }
+
+    .query-help {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.65;
+    }
+
+    .query-help a {
+      color: var(--blue-dark);
+      text-decoration: none;
+      border-bottom: 1px dashed rgba(21, 55, 67, 0.35);
+    }
+
+    .query-help a:hover {
+      color: var(--green);
+      border-bottom-color: var(--green);
+    }
+
+    .action-panel {
+      display: flex;
+      gap: 14px;
+      align-items: stretch;
+      margin-top: 16px;
+    }
+
+    .submit-card {
+      flex: 1;
+      background: linear-gradient(180deg, #153743 0%, #183b49 100%);
+      border-radius: 16px;
+      padding: 18px;
+      color: #fff;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .submit-card::after {
+      content: '';
+      position: absolute;
+      right: -18px;
+      top: -18px;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: rgba(6, 182, 246, 0.07);
+    }
+
+    .submit-eyebrow {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--teal);
+      margin-bottom: 6px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .submit-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .submit-sub {
+      color: rgba(255, 255, 255, 0.64);
+      font-size: 13px;
+      line-height: 1.65;
+      margin-bottom: 16px;
+      position: relative;
+      z-index: 1;
+      max-width: 600px;
+    }
+
+    .submit-btn {
+      position: relative;
+      z-index: 1;
+      border: none;
+      border-radius: 12px;
+      padding: 0.95rem 1.2rem;
+      background: linear-gradient(135deg, var(--green) 0%, #a5c624 100%);
+      color: #fff;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      box-shadow: 0 10px 20px rgba(137, 174, 16, 0.22);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .submit-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 14px 24px rgba(137, 174, 16, 0.28);
+      color: #fff;
+    }
+
+    .submit-btn:focus {
+      box-shadow: 0 0 0 0.2rem rgba(137, 174, 16, 0.22);
+    }
+
+    .side-card {
+      width: 280px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1.5px solid rgba(131, 200, 209, 0.48);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .side-card .mini-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .side-card .stat-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(131, 200, 209, 0.22);
+    }
+
+    .side-card .stat-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .side-card .stat-row:first-of-type {
+      padding-top: 0;
+    }
+
+    .side-card .stat-val {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--blue-dark);
+      line-height: 1;
+    }
+
+    .side-card .stat-lbl {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .side-card .dash {
+      margin-top: 14px;
+      border-radius: 12px;
+      background: linear-gradient(180deg, rgba(21, 55, 67, 0.96) 0%, rgba(21, 55, 67, 0.92) 100%);
+      padding: 12px;
+      min-height: 114px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .side-card .dash::before {
+      content: '';
+      position: absolute;
+      inset: auto -14px -18px auto;
+      width: 92px;
+      height: 92px;
+      border-radius: 50%;
+      background: rgba(6, 182, 246, 0.08);
+    }
+
+    .dash-bars {
+      display: flex;
+      align-items: flex-end;
+      gap: 5px;
+      height: 62px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .dash-bar {
+      flex: 1;
+      border-radius: 3px 3px 0 0;
+      background: var(--teal);
+      opacity: 0.72;
+      min-width: 10px;
+    }
+
+    .dash-bar.accent {
+      background: var(--green-mid);
+      opacity: 1;
+    }
+
+    .dash-filters {
+      display: flex;
+      gap: 4px;
+      margin-top: 10px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .dash-filter {
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .dash-label {
+      margin-top: 10px;
+      font-size: 9px;
+      color: rgba(255, 255, 255, 0.46);
+      font-family: 'DM Mono', monospace;
+      position: relative;
+      z-index: 1;
+      text-align: right;
+      word-break: break-word;
+    }
+
+    .dash-label a {
+      color: #bfeec9;
+      text-decoration: none;
+    }
+
+    .dash-label a:hover {
+      color: #e5ffd8;
+    }
+
+    .process-flow {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .flow-step {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(131, 200, 209, 0.42);
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+      min-height: 148px;
+    }
+
+    .flow-step .flow-kicker {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .flow-step h3 {
+      font-size: 14px;
+      line-height: 1.35;
+      font-weight: 700;
+      color: var(--blue-dark);
+      margin-bottom: 8px;
+    }
+
+    .flow-step p {
+      font-size: 12px;
+      line-height: 1.65;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    .flow-step .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .tag {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 1px solid;
+      display: inline-flex;
+      align-items: center;
+      white-space: nowrap;
+    }
+
+    .tag.green {
+      color: var(--green);
+      border-color: var(--green-light);
+      background: var(--green-light);
+    }
+
+    .tag.teal {
+      color: #2a7f8a;
+      border-color: var(--teal-light);
+      background: var(--teal-light);
+    }
+
+    .tag.blue {
+      color: #0570a0;
+      border-color: #cbeef9;
+      background: #cbeef9;
+    }
+
+    .error-alert {
+      border: 1px solid rgba(220, 53, 69, 0.20);
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(220, 53, 69, 0.08);
+    }
+
+    .understand-section {
+      margin-top: 18px;
+    }
+
+    .understand-title {
+      text-align: center;
+      margin-bottom: 14px;
+    }
+
+    .understand-title .eyebrow {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .understand-title h2 {
+      font-size: clamp(20px, 2.4vw, 28px);
+      line-height: 1.2;
+      font-weight: 700;
+      color: var(--blue-dark);
+      margin: 0;
+    }
+
+    .understand-title p {
+      max-width: 760px;
+      margin: 8px auto 0;
+      color: var(--text-muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .step-card {
+      background: var(--card-bg);
+      border-radius: 14px;
+      border: 1.5px solid var(--teal-light);
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      margin-top: 12px;
+    }
+
+    .step-card:hover {
+      border-color: var(--teal);
+      box-shadow: var(--shadow-soft);
+    }
+
+    .step-card.active {
+      border-color: var(--green);
+      box-shadow: 0 10px 24px rgba(137, 174, 16, 0.12);
+    }
+
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--teal-light);
+    }
+
+    .step-header-text {
+      flex: 1;
+    }
+
+    .step-header h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--blue-dark);
+      margin: 0;
+    }
+
+    .step-toggle {
+      font-size: 16px;
+      color: var(--text-muted);
+      transition: transform 0.25s;
+      user-select: none;
+    }
+
+    .step-card.active .step-toggle {
+      transform: rotate(180deg);
+    }
+
+    .step-body {
+      display: none;
+      padding: 0;
+    }
+
+    .step-card.active .step-body {
+      display: block;
+    }
+
+    .step-visual {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--teal-light);
+    }
+
+    .step-desc {
+      padding: 12px 18px 14px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.7;
+      border-bottom: 1px solid var(--teal-light);
+    }
+
+    .step-tags {
+      padding: 10px 18px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    @media (max-width: 992px) {
+      .pipeline-strip,
+      .action-panel,
+      .process-flow {
+        grid-template-columns: 1fr;
+      }
+
+      .action-panel {
+        display: grid;
+      }
+
+      .side-card {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .page-shell {
+        padding: 18px 14px 30px;
+      }
+
+      .input-method-wrap {
+        grid-template-columns: 1fr;
+      }
+
+      .hero p {
+        font-size: 14px;
+      }
+
+      .hero-visual {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  
+    .tracker-teaser {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .tracker-teaser-left {
+      background: linear-gradient(180deg, #153743 0%, #183b49 100%);
+      border-radius: 16px;
+      padding: 18px;
+      color: #fff;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .tracker-teaser-left::after {
+      content: '';
+      position: absolute;
+      right: -18px;
+      top: -18px;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: rgba(6, 182, 246, 0.07);
+    }
+
+    .tracker-teaser-left h2 {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 6px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .tracker-teaser-left p {
+      color: rgba(255, 255, 255, 0.64);
+      font-size: 13px;
+      line-height: 1.65;
+      margin: 0 0 14px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .tracker-link-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.85rem 1.05rem;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--green) 0%, #a5c624 100%);
+      color: #fff;
+      font-weight: 700;
+      text-decoration: none;
+      box-shadow: 0 10px 20px rgba(137, 174, 16, 0.22);
+      position: relative;
+      z-index: 1;
+    }
+
+    .tracker-link-btn:hover {
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    .tracker-teaser-right {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1.5px solid rgba(131, 200, 209, 0.48);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    @media (max-width: 992px) {
+      .tracker-teaser {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    .tracker-panel {
+      width: 100%;
+      margin-top: 22px;
+      background: linear-gradient(180deg, #153743 0%, #183b49 100%);
+      border-radius: 18px;
+      padding: 22px;
+      display: grid;
+      grid-template-columns: 1.05fr 1.15fr;
+      gap: 18px;
+      align-items: stretch;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .tracker-panel::before {
+      content: '';
+      position: absolute;
+      right: -30px;
+      top: -30px;
+      width: 170px;
+      height: 170px;
+      border-radius: 50%;
+      background: rgba(6,182,246,0.08);
+    }
+
+    .tracker-panel-left {
+      color: #fff;
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-width: 0;
+    }
+
+    .tracker-panel-left h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 0 0 8px;
+      line-height: 1.15;
+    }
+
+    .tracker-panel-left p {
+      color: rgba(255,255,255,0.64);
+      font-size: 14px;
+      line-height: 1.7;
+      margin: 0 0 16px;
+      max-width: 38ch;
+    }
+
+    .tracker-panel-left .output-stats {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 2px;
+    }
+
+    .tracker-panel-left .stat-chip {
+      min-width: 92px;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      text-align: center;
+    }
+
+    .tracker-panel-left .stat-val {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--green-mid);
+      line-height: 1;
+    }
+
+    .tracker-panel-left .stat-lbl {
+      font-size: 9px;
+      color: rgba(255,255,255,0.46);
+      margin-top: 3px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .tracker-panel-right {
+      position: relative;
+      z-index: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tracker-figure-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--teal);
+      margin-bottom: 10px;
+    }
+
+    .dashboard-preview-large {
+      flex: 1;
+      width: 100%;
+      min-height: 240px;
+      padding: 14px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      position: relative;
+    }
+
+    .dash-bar-group-large {
+      height: 170px;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .dash-filter-row-large {
+      gap: 5px;
+    }
+
+    .tracker-panel .tracker-link-btn {
+      margin-top: 16px;
+      align-self: flex-start;
+    }
+
+    @media (max-width: 992px) {
+      .tracker-panel {
+        grid-template-columns: 1fr;
+      }
+
+      .dashboard-preview-large {
+        min-height: 200px;
+      }
+    }
+
+  </style>
 </head>
-<body class="bg-light">
-  <div class="container py-5">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <h1 class="card-title text-center mb-4">🚍🌍 Transport Policy Miner 📃⛏️</h1>
-        
-        <!-- Error Message Display -->
-        {% if error %}
-        <div class="alert alert-danger" role="alert">
-          <strong>Error:</strong> {{ error }}
-        </div>
-        {% endif %}
+<body>
+  <div class="page-shell">
+    <div class="hero">
+      <div class="eyebrow">NDC Transport Tracker &bull; AI-powered analysis pipeline</div>
+      <h1>Automated analysis of national <br> climate policy documents</h1>
+      <p>
+        Upload a policy PDF or provide a direct document URL to extract, retrieve, and classify transport-relevant commitments from NDCs and related submissions.
+      </p>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger error-alert mb-3" role="alert">
+      <strong>Error:</strong> {{ error }}
+    </div>
+    {% endif %}
+
+    <div class="pipeline-card">
+      <div class="form-panel">
+        <div class="step-eyebrow">Start analysis</div>
 
         <form method="post" enctype="multipart/form-data">
-          
-
-          <!-- Input Method Selection -->
-          <div class="mb-4">
-            <label class="form-label">Choose input method:</label>
-            <div class="form-check">
+          <div class="input-method-wrap">
+            <label class="choice-card active" for="upload_method" id="upload_choice">
               <input class="form-check-input" type="radio" name="input_method" id="upload_method" value="upload" checked>
-              <label class="form-check-label" for="upload_method">
-                📁 Upload PDF File
-              </label>
-            </div>
-            <div class="form-check">
+              <span class="choice-dot"></span>
+              <div class="choice-kicker">Option 1</div>
+              <div class="choice-title">Upload PDF File</div>
+              <div class="choice-sub">Use a local climate policy document from your machine.</div>
+            </label>
+
+            <label class="choice-card" for="url_method" id="url_choice">
               <input class="form-check-input" type="radio" name="input_method" id="url_method" value="url">
-              <label class="form-check-label" for="url_method">
-                🌐 Download from URL
-              </label>
+              <span class="choice-dot"></span>
+              <div class="choice-kicker">Option 2</div>
+              <div class="choice-title">Download from URL</div>
+              <div class="choice-sub">Provide a direct link to a PDF document.</div>
+            </label>
+          </div>
+
+          <div class="form-grid">
+            <div class="field-card" id="upload_section">
+              <label for="pdf_file">Upload Climate Policy PDF</label>
+              <input class="form-control" type="file" id="pdf_file" name="pdf_file" accept=".pdf">
+            </div>
+
+            <div class="field-card" id="url_section" style="display: none;">
+              <label for="pdf_url">PDF URL</label>
+              <input type="url" class="form-control" id="pdf_url" name="pdf_url" placeholder="https://example.com/document.pdf">
+              <div class="support-row">
+                <span>Enter a direct link to a PDF file.</span>
+              </div>
+            </div>
+
+            <div class="field-card">
+              <label for="query_terms">Additional Search Terms</label>
+              <input type="text" class="form-control" id="query_terms" name="query_terms" placeholder="Add search terms to refine the query, for example carbon neutrality or renewable energy">
+              <div class="query-help">
+                <span class="hint-pill">Optional</span>
+                <span class="ms-1">Use extra terms to narrow the semantic search.</span>
+                <div class="mt-2">
+                  <a href="#" data-bs-toggle="tooltip" title="transport, vehicles, emissions, BA, electric, U, GH, reduction, public, G, compared, scenario, transportation, reduce, CO, levels, net, es, zero, fuel, vehicle, em, passenger, road, mobility, veh, target, new, idad, CO, Mt, car, ision, transporte, rail, cars, fleet, buses, fuels, traffic, efficiency, ículos, ar, ct, e, gas, greenhouse, redu, freight, d, l, share, km, o, bio, achieve, os, elé, els, hydrogen, urban, infrastructure, electr, The, hybrid, relative, charging, neutrality, eq, é, ici, ), least, total, ado, emission, vé, standards, én, aims, e, ambition, ’, modes, il, carbon, shift, as, neutral, fu, bus, EV, ré, mov, condition, hic, sales, million, cción, inter, año, modal, maritime, system, diesel, público, kt, network, ules, alternative, cities, percent, heavy, re, conditional, Transport, improvement, -em, Electric, RT, level, use, nel, transit, roads, in, light, ibles, energ, year, rica, goal, aviation, per, missions, long, powered, European, consumption, arbon, ric, lanes, vo, part, walking, sharing, rapport, ación, t, bicycle, motor, stations, infra, s, duction, ov, a, To, sc, railways, cent, private, ías, reductions, ), ual, r, achieved, ada, -m, condition, élect, ef, resilience, proof, infrastructure">
+                    Default search terms
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- PDF Upload Section -->
-          <div class="mb-3" id="upload_section">
-            <label for="pdf_file" class="form-label">Upload Climate Policy PDF</label>
-            <input class="form-control" type="file" id="pdf_file" name="pdf_file" accept=".pdf">
+          <div class="action-panel">
+            <div class="submit-cta">
+              <button type="submit" class="btn submit-btn">Start Analysis</button>
+            </div>
           </div>
 
-          <!-- URL Input Section -->
-          <div class="mb-3" id="url_section" style="display: none;">
-            <label for="pdf_url" class="form-label">PDF URL</label>
-            <input type="url" class="form-control" id="pdf_url" name="pdf_url" placeholder="https://example.com/document.pdf">
-            <small class="text-muted">Enter a direct link to a PDF file</small>
-          </div>
-
-          <!-- Optional Query Terms -->
-          <div class="mb-3"></div>
-            <label for="query_terms" class="form-label">Additional Search Terms (optional)</label>
-            <input type="text" class="form-control" id="query_terms" name="query_terms" placeholder="Add search terms to refine the query (e.g., carbon neutrality, renewable energy)">
-            <small class="text-muted"></small>
-              <a href="#" data-bs-toggle="tooltip" title="transport, vehicles, emissions, BA, electric, U, GH, reduction, public, G, compared, scenario, transportation, reduce, CO, levels, net, es, zero, fuel, vehicle, em, passenger, road, mobility, veh, target, new, idad, CO, Mt, car, ision, transporte, rail, cars, fleet, buses, fuels, traffic, efficiency, ículos, ar, ct, e, gas, greenhouse, redu, freight, d, l, share, km, o, bio, achieve, os, elé, els, hydrogen, urban, infrastructure, electr, The, hybrid, relative, charging, neutrality, eq, é, ici, ), least, total, ado, emission, vé, standards, én, aims, e, ambition, ’, modes, il, carbon, shift, as, neutral, fu, bus, EV, ré, mov, condition, hic, sales, million, cción, inter, año, modal, maritime, system, diesel, público, kt, network, ules, alternative, cities, percent, heavy, re, conditional, Transport, improvement, -em, Electric, RT, level, use, nel, transit, roads, in, light, ibles, energ, year, rica, goal, aviation, per, missions, long, powered, European, consumption, arbon, ric, lanes, vo, part, walking, sharing, rapport, ación, t, bicycle, motor, stations, infra, s, duction, ov, a, To, sc, railways, cent, private, ías, reductions, ), ual, r, achieved, ada, -m, condition, élect, ef, resilience, proof, infrastructure">
-                Default search terms
-              </a>
-            </small>
-          </div>
-
-          <!-- Submit Button -->
-          <div class="text-center">
-            <button type="submit" class="btn btn-primary">Extract and Classify</button>
-          </div>
-
-          <!-- Methodology Information -->
-          <div class="mb-3">
-            <p class="text-muted">
-              To find out more about the methodology applied, please see <a href="https://github.com/nicolas-becker/climate-policy-miner/blob/main/240825_AIFB_Masterarbeit_NB_FINAL.pdf" target="_blank">here</a>.
+          <div class="mt-4 pt-2" style="border-top: 1px solid rgba(131, 200, 209, 0.28);">
+            <p class="mb-0" style="font-size: 12px; color: var(--text-muted); line-height: 1.7;">
+              To find out more about the methodology applied, please see
+              <a href="https://github.com/nicolas-becker/climate-policy-miner/blob/main/240825_AIFB_Masterarbeit_NB_FINAL.pdf" target="_blank" rel="noopener">here</a>.
             </p>
-            </div>
-
+          </div>
         </form>
+      </div>
+    </div>
+
+    <div class="understand-section">
+      <div class="understand-title">
+        <div class="eyebrow">Understand the tool</div>
+        <h2>How the analysis pipeline works</h2>
+        <p>
+          The tool follows a four-step AI pipeline that turns climate policy PDFs into structured, traceable transport insights.
+        </p>
+      </div>
+
+      <div class="step-card active" id="card1" onclick="toggleCard('card1')">
+        <div class="step-header">
+          <div class="step-num green">1</div>
+          <div class="step-header-text">
+            <div class="step-eyebrow">Document parsing</div>
+            <h3>Preprocessing &amp; structure detection</h3>
+          </div>
+          <div class="step-toggle">▾</div>
+        </div>
+        <div class="step-body">
+          <div class="step-visual">
+            <div class="preprocess-visual">
+              <div class="pdf-raw">
+                <div class="pdf-raw-box">
+                  <div class="pdf-raw-line s"></div>
+                  <div class="pdf-raw-line s"></div>
+                  <div class="pdf-raw-line v"></div>
+                  <div class="pdf-raw-line v"></div>
+                  <div class="pdf-raw-line xs"></div>
+                  <div class="pdf-raw-img"></div>
+                  <div class="pdf-raw-line s" style="margin-top:4px"></div>
+                  <div class="pdf-raw-line v"></div>
+                  <div class="pdf-raw-line v"></div>
+                  <div class="pdf-raw-line xs"></div>
+                </div>
+                <div style="font-size:9px;text-align:center;color:var(--text-muted);margin-top:4px">raw PDF</div>
+              </div>
+              <div class="transform-arrow">→</div>
+              <div class="parsed-tree">
+                <div class="node-line"><span class="tree-badge h">H1</span> <span>Chapter title</span></div>
+                <div class="node-line indent"><span class="tree-badge h">H2</span> <span>Section heading</span></div>
+                <div class="node-line indent2"><span class="tree-badge p">¶</span> <span>Paragraph text block</span></div>
+                <div class="node-line indent2"><span class="tree-badge t">⊞</span> <span>Data table</span></div>
+                <div class="node-line indent2"><span class="tree-badge i">⬜</span> <span>Image / chart</span></div>
+                <div class="node-line indent"><span class="tree-badge h">H2</span> <span>Next section</span></div>
+                <div class="node-line indent2"><span class="tree-badge p">¶</span> <span>Paragraph text block</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="step-desc">
+            Each PDF is decomposed into its individual structural elements: text blocks, tables, images, titles, and headings. The open-source tool Unstructured-IO is applied to reconstruct the logical document hierarchy using OCR, so all subsequent steps operate on organized, context-aware content rather than raw text.
+          </div>
+          <div class="step-tags">
+            <span class="tag green">OCR</span>
+            <span class="tag teal">Structure</span>
+            <span class="tag blue">Hierarchy</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-card" id="card2" onclick="toggleCard('card2')">
+        <div class="step-header">
+          <div class="step-num teal">2</div>
+          <div class="step-header-text">
+            <div class="step-eyebrow">Semantic search</div>
+            <h3>Retrieval of relevant passages</h3>
+          </div>
+          <div class="step-toggle">▾</div>
+        </div>
+        <div class="step-body">
+          <div class="step-visual">
+            <div class="retrieval-visual">
+              <div class="query-col">
+                <div class="query-bubble">"transport,<br>vehicles,<br>emissions,<br>targets,<br>..."</div>
+                <div class="query-label">search query</div>
+              </div>
+              <div class="retrieval-arrow">→</div>
+              <div class="concepts-col">
+                <div style="font-size:9px;color:var(--text-muted);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.07em;">Matching passages by relevance score</div>
+                <div class="concept-row">
+                  <div class="concept-bar" style="width:62%;background:var(--green)"></div>
+                  <div class="concept-label">"GHG reduction targets..."</div>
+                  <div class="concept-score">0.92</div>
+                </div>
+                <div class="concept-row">
+                  <div class="concept-bar" style="width:52%;background:var(--green)"></div>
+                  <div class="concept-label">"Public transport measures..."</div>
+                  <div class="concept-score">0.84</div>
+                </div>
+                <div class="concept-row">
+                  <div class="concept-bar" style="width:48%;background:var(--green-mid)"></div>
+                  <div class="concept-label">"Fuel efficiency standards..."</div>
+                  <div class="concept-score">0.78</div>
+                </div>
+                <div style="border-top:1px dashed rgba(0,0,0,0.22);margin:6px 0 8px 0;"></div>
+                <div class="concept-row">
+                  <div class="concept-bar" style="width:40%;background:var(--teal)"></div>
+                  <div class="concept-label">"Renewable energy goals..."</div>
+                  <div class="concept-score">0.69</div>
+                </div>
+                <div class="concept-row">
+                  <div class="concept-bar" style="width:32%;background:#b0dde3"></div>
+                  <div class="concept-label">"Green buildings..."</div>
+                  <div class="concept-score">0.56</div>
+                </div>
+                <div class="concept-row">
+                  <div class="concept-bar" style="width:28%;background:#cde9ec"></div>
+                  <div class="concept-label">"Climate finance..."</div>
+                  <div class="concept-score">0.41</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="step-desc">
+            The system searches all document elements using semantic similarity rather than keyword matching. Text is converted into numeric vector representations, meaning a query for "targets" also surfaces passages mentioning "goals" or "commitments". This allows for more comprehensive retrieval of relevant content, even when different terminology is used across documents.
+          </div>
+          <div class="step-tags">
+            <span class="tag teal">Vectors</span>
+            <span class="tag blue">Relevance</span>
+            <span class="tag green">Context</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-card" id="card3" onclick="toggleCard('card3')">
+        <div class="step-header">
+          <div class="step-num green">3</div>
+          <div class="step-header-text">
+            <div class="step-eyebrow">Exact wording &amp; traceability</div>
+            <h3>Quote extraction &amp; verification</h3>
+          </div>
+          <div class="step-toggle">▾</div>
+        </div>
+        <div class="step-body">
+          <div class="step-visual">
+            <div class="quote-visual">
+              <div class="doc-preview">
+                <div class="doc-preview-page">p. 14</div>
+                <div class="doc-preview-line"></div>
+                <div class="doc-preview-line s"></div>
+                <div class="doc-preview-line highlighted"></div>
+                <div class="doc-preview-line highlighted2"></div>
+                <div class="doc-preview-line"></div>
+                <div class="doc-preview-line s"></div>
+                <div class="doc-preview-line"></div>
+                <div class="doc-preview-line highlighted"></div>
+                <div class="doc-preview-line"></div>
+                <div class="doc-preview-line s"></div>
+                <div class="doc-preview-line"></div>
+                <div class="query-label">test passage</div>
+              </div>
+              <div style="display:flex;align-items:center;padding-top:10px;font-size:16px;color:var(--teal);flex-shrink:0">→</div>
+              <div class="quote-boxes-col">
+                <div class="quote-box">
+                  <div class="quote-mark">"</div>
+                  <div class="quote-text">Reduce transport sector emissions by 30% below 2010 levels by 2030…"</div>
+                  <div class="quote-meta">
+                    <div class="page-ref">p. 14</div>
+                    <div class="verified">✓ verified</div>
+                  </div>
+                </div>
+                <div class="quote-box" style="opacity:0.65">
+                  <div class="quote-mark">"</div>
+                  <div class="quote-text">Expand urban rail network to cover 80% of metropolitan population…"</div>
+                  <div class="quote-meta">
+                    <div class="page-ref">p. 14</div>
+                    <div class="verified">✓ verified</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="step-desc">
+            Using large language models, the system extracts exact quotes from relevant passages, preserving the original wording and a link to the source page. A verification step then checks that each extracted quote is found verbatim in the original document, preventing the extraction of hallucinated text.
+          </div>
+          <div class="step-tags">
+            <span class="tag green">Quotes</span>
+            <span class="tag teal">Verification</span>
+            <span class="tag blue">Traceability</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-card" id="card4" onclick="toggleCard('card4')">
+        <div class="step-header">
+          <div class="step-num blue">4</div>
+          <div class="step-header-text">
+            <div class="step-eyebrow">AI-assisted taxonomy</div>
+            <h3>Classification by category</h3>
+          </div>
+          <div class="step-toggle">▾</div>
+        </div>
+        <div class="step-body">
+          <div class="step-visual">
+            <div class="classif-visual">
+              <div class="classif-quote">
+                <div class="classif-quote-box">"Reduce transport sector emissions by 30% below 2010 levels by 2030…"</div>
+                <div class="classif-label">extracted quote</div>
+              </div>
+              <div class="classif-arrow" style="color:var(--teal);font-size:16px;padding-top:14px">→</div>
+              <div class="taxonomy-col">
+                <div class="taxon-row">
+                  <div class="taxon-label">Sector</div>
+                  <div class="taxon-tags">
+                    <span class="taxon-tag sector active-tag">Transport</span>
+                    <span class="taxon-tag sector" style="opacity:0.4">Energy</span>
+                    <span class="taxon-tag sector" style="opacity:0.4">Economy-wide</span>
+                  </div>
+                </div>
+                <div class="taxon-row">
+                  <div class="taxon-label">Type</div>
+                  <div class="taxon-tags">
+                    <span class="taxon-tag type active-tag">Target</span>
+                    <span class="taxon-tag type" style="opacity:0.4">Measure</span>
+                  </div>
+                </div>
+                <div class="taxon-row">
+                  <div class="taxon-label">Climate action</div>
+                  <div class="taxon-tags">
+                    <span class="taxon-tag type active-tag">Mitigation</span>
+                    <span class="taxon-tag type" style="opacity:0.4">Adaptation</span>
+                    <span class="taxon-tag type" style="opacity:0.4">Net-zero</span>
+                  </div>
+                </div>
+                <div class="taxon-row">
+                  <div class="taxon-label">Conditionality</div>
+                  <div class="taxon-tags">
+                    <span class="taxon-tag cond" style="opacity:0.4">Conditional</span>
+                    <span class="taxon-tag cond active-tag">Unconditional</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="step-desc">
+            An efficient general knowledge LLM (GPT-4o-mini) categorizes each quote using a taxonomy defined by the analyst team. Learning in-context from detailed definitions and examples, the model distinguishes between sectors, targets from measures, mitigation from adaptation, and flags conditional commitments that depend on external support.
+          </div>
+          <div class="step-tags">
+            <span class="tag blue">Taxonomy</span>
+            <span class="tag green">Mitigation</span>
+            <span class="tag teal">Conditioning</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tracker-panel">
+      <div class="tracker-panel-left">
+        <div class="step-eyebrow">Explore the tracker</div>
+        <h2>NDC Transport Tracker</h2>
+        <p>
+          View the structured climate policy insights generated by the pipeline across countries and documents.
+        </p>
+
+        <div class="output-stats">
+          <div class="stat-chip">
+            <div class="stat-val">195</div>
+            <div class="stat-lbl">Countries</div>
+          </div>
+          <div class="stat-chip">
+            <div class="stat-val">600+</div>
+            <div class="stat-lbl">Documents</div>
+          </div>
+          <div class="stat-chip">
+            <div class="stat-val">2015–</div>
+            <div class="stat-lbl">Coverage</div>
+          </div>
+        </div>
+
+        <a class="tracker-link-btn"
+          href="https://changing-transport.org/tracker/"
+          target="_blank"
+          rel="noopener">
+          Open the tracker
+        </a>
+      </div>
+
+      <div class="tracker-panel-right">
+
+        <div class="dashboard-preview dashboard-preview-large">
+          <div class="dash-bar-group dash-bar-group-large">
+            <div class="dash-bar" style="height:30%"></div>
+            <div class="dash-bar accent" style="height:74%"></div>
+            <div class="dash-bar" style="height:56%"></div>
+            <div class="dash-bar" style="height:92%"></div>
+            <div class="dash-bar" style="height:42%"></div>
+            <div class="dash-bar accent" style="height:68%"></div>
+            <div class="dash-bar" style="height:50%"></div>
+            <div class="dash-bar" style="height:78%"></div>
+            <div class="dash-bar accent" style="height:61%"></div>
+          </div>
+
+          <div class="dash-filter-row dash-filter-row-large">
+            <div class="dash-filter" style="width:34%"></div>
+            <div class="dash-filter" style="width:22%"></div>
+            <div class="dash-filter" style="width:18%"></div>
+            <div class="dash-filter" style="width:12%"></div>
+          </div>
+
+          <div class="dash-label">
+            <a href="https://changing-transport.org/tracker/" target="_blank" rel="noopener">
+              changing-transport.org
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
   <script>
-    // JavaScript to toggle between upload and URL sections
     document.addEventListener('DOMContentLoaded', function() {
       const uploadRadio = document.getElementById('upload_method');
       const urlRadio = document.getElementById('url_method');
@@ -90,6 +2291,13 @@
       const urlSection = document.getElementById('url_section');
       const pdfFileInput = document.getElementById('pdf_file');
       const pdfUrlInput = document.getElementById('pdf_url');
+      const uploadChoice = document.getElementById('upload_choice');
+      const urlChoice = document.getElementById('url_choice');
+
+      function syncChoiceCards() {
+        uploadChoice.classList.toggle('active', uploadRadio.checked);
+        urlChoice.classList.toggle('active', urlRadio.checked);
+      }
 
       function toggleSections() {
         if (uploadRadio.checked) {
@@ -103,32 +2311,53 @@
           pdfFileInput.required = false;
           pdfUrlInput.required = true;
         }
+        syncChoiceCards();
       }
 
       uploadRadio.addEventListener('change', toggleSections);
       urlRadio.addEventListener('change', toggleSections);
-      
-      // Initialize the correct state
-      toggleSections();
-    });
-    
-    // Enhance form submission to include filename in progress URL
-    document.querySelector('form').addEventListener('submit', function(e) {
-        // Don't prevent default - let the form submit normally
-        // Just add this to potentially help with filename passing
-        const fileInput = document.getElementById('pdf_file');
-        const urlInput = document.getElementById('pdf_url');
-        
-        // Store filename for potential use
-        if (fileInput && fileInput.files[0]) {
-            sessionStorage.setItem('uploadedFilename', fileInput.files[0].name);
-        } else if (urlInput && urlInput.value) {
-            const urlPath = urlInput.value.split('/').pop();
-            sessionStorage.setItem('uploadedFilename', urlPath || 'downloaded_document.pdf');
-        }
-    });
-</script>
 
+      uploadChoice.addEventListener('click', function() {
+        uploadRadio.checked = true;
+        toggleSections();
+      });
+
+      urlChoice.addEventListener('click', function() {
+        urlRadio.checked = true;
+        toggleSections();
+      });
+
+      toggleSections();
+
+      const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+      tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+      });
+    });
+
+    function toggleCard(id) {
+      var cards = ['card1', 'card2', 'card3', 'card4'];
+      var clicked = document.getElementById(id);
+      var wasActive = clicked.classList.contains('active');
+      cards.forEach(function(c) {
+        document.getElementById(c).classList.remove('active');
+      });
+      if (!wasActive) {
+        clicked.classList.add('active');
+      }
+    }
+
+    document.querySelector('form').addEventListener('submit', function() {
+      const fileInput = document.getElementById('pdf_file');
+      const urlInput = document.getElementById('pdf_url');
+
+      if (fileInput && fileInput.files[0]) {
+        sessionStorage.setItem('uploadedFilename', fileInput.files[0].name);
+      } else if (urlInput && urlInput.value) {
+        const urlPath = urlInput.value.split('/').pop();
+        sessionStorage.setItem('uploadedFilename', urlPath || 'downloaded_document.pdf');
+      }
+    });
   </script>
 </body>
 </html>
