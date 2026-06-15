@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Azure Login
-        uses: azure/login@v1
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.TRANSPORTPOLICYMINER_AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.TRANSPORTPOLICYMINER_AZURE_TENANT_ID }}
@@ -40,7 +40,7 @@ jobs:
           registryPassword: ${{ secrets.TRANSPORTPOLICYMINER_REGISTRY_PASSWORD }}
           containerAppName: transport-policy-miner
           resourceGroup: ndc-tracker
-          imageToBuild: transportpolicyminer.azurecr.io/transport-policy-miner:${{ github.sha }}
+          imageToBuild: transportpolicyminer.azurecr.io/transport-policy-miner:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           targetPort: 10000
           ingress: external
           environmentVariables: AZURE_OPENAI_API_KEY=${{ secrets.AZURE_OPENAI_API_KEY }} AZURE_OPENAI_ENDPOINT=${{ secrets.AZURE_OPENAI_ENDPOINT }} AZURE_OPENAI_API_VERSION=${{ secrets.AZURE_OPENAI_API_VERSION }} AZURE_OPENAI_CHAT_DEPLOYMENT_NAME=${{ secrets.AZURE_OPENAI_CHAT_DEPLOYMENT_NAME }} AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME=${{ secrets.AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME }} PORT=10000

@@ -15,10 +15,13 @@ RUN apt-get update \
         tesseract-ocr \
         tesseract-ocr-eng \
         libheif-dev \
+        libheif-plugin-aomenc \
         curl \
         gcc \
         g++ \
         libc6-dev \
+        build-essential \
+        python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy and install Python requirements (much faster than conda)
