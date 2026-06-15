@@ -14,6 +14,7 @@ RUN apt-get update \
         poppler-utils \
         tesseract-ocr \
         tesseract-ocr-eng \
+        libheif-dev \
         curl \
         gcc \
         g++ \
