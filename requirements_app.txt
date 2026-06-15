@@ -19,6 +19,10 @@ requests==2.31.0
 pymupdf
 unstructured[pdf]
 unstructured-inference
+# Pin pi-heif (transitive dep of unstructured[pdf]) to the last release that
+# ships prebuilt cp39 wheels. 1.2.x+ dropped Python 3.9 wheels, forcing a
+# source build that fails against Debian trixie's libheif on the Py3.9 image.
+pi-heif==1.1.1
 
 # Vector stores and embeddings
 faiss-cpu
