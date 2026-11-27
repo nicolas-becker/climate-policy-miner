@@ -651,8 +651,7 @@ def run_stats(state, pages):
     return {
         'pages': pages or '',
         'runtime': runtime,
-        'tokens': f'{int(tokens):,}' if isinstance(tokens, (int, float)) else '',
-        'tokens_raw': str(int(tokens)) if isinstance(tokens, (int, float)) else '',
+        'tokens': str(int(tokens)) if isinstance(tokens, (int, float)) else '',
     }
 
 
@@ -918,6 +917,54 @@ def download(task_id, kind):
     if not name:
         abort(404)
     return send_file(os.path.join(output_dir(task_id), name), as_attachment=True, download_name=name)
+
+
+ZIP_README = """TRANSPORT POLICY MINER - RESULTS PACKAGE
+==========================================
+Task ID: {task_id}
+Document: {filename}
+Generated: {generated}
+Validated: {validated}
+
+CONTENTS:
+- output/: Final analysis results (Excel, highlighted PDF, AI summary).
+  Files ending in _validated were rebuilt from the reviewed rows.
+- by-products/: Intermediate processing files (JSON, CSV)
+- vector_stores/: Semantic search indexes
+- logs/: Processing logs
+- review/: Analysed PDF (source.pdf), rows as extracted (pipeline.json)
+  and the latest review (validation.json, can be imported again on
+  the validation page)
+
+Each task has its own isolated folder to prevent conflicts.
+"""
+
+
+@review_bp.route('/review/<task_id>/download-all')
+def download_all(task_id):
+    """Whole task folder as one ZIP, like the /download route of the old results page."""
+    import zipfile
+    folder = _ctx['results_folder'](task_id)
+    _check_task_id(task_id)
+    if not os.path.isdir(folder):
+        abort(404)
+    state = load_state(task_id) or {}
+    filename = state.get('filename') or 'document.pdf'
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for root, _dirs, files in os.walk(folder):
+            for name in files:
+                if name.endswith('.tmp'):
+                    continue
+                path = os.path.join(root, name)
+                zf.write(path, os.path.relpath(path, folder))
+        zf.writestr('README.txt', ZIP_README.format(
+            task_id=task_id, filename=filename, generated=time.strftime('%Y-%m-%d %H:%M:%S'),
+            validated=(state.get('validated_at') or '')[:10] if state.get('validated') else 'no'))
+    buf.seek(0)
+    stem = os.path.splitext(secure_filename(filename))[0] or 'transport_policy'
+    return send_file(buf, mimetype='application/zip', as_attachment=True,
+                     download_name=f'{stem}_analysis.zip')
 
 
 @review_bp.route('/api/review/<task_id>/finalize', methods=['POST'])

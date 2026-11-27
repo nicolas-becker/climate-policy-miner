@@ -45,8 +45,7 @@
     <div class="row-flex runstats" title="Click a value to copy it">
       <span>Pages <button type="button" class="copyval" data-copy="{{ run.pages }}">{{ run.pages or 'n/a' }}</button></span>
       <span>Runtime <button type="button" class="copyval" data-copy="{{ run.runtime }}">{{ run.runtime or 'n/a' }}</button></span>
-      <span>Tokens used <button type="button" class="copyval" data-copy="{{ run.tokens_raw }}">{{ run.tokens or 'n/a' }}</button></span>
-      <button type="button" class="btn small" data-copy="{{ run.pages }}&#9;{{ run.runtime }}&#9;{{ run.tokens_raw }}" title="Copies the three values separated by tabs, ready to paste into a spreadsheet row">Copy all</button>
+      <span>Tokens used <button type="button" class="copyval" data-copy="{{ run.tokens }}">{{ run.tokens or 'n/a' }}</button></span>
     </div>
     {% endif %}
   </div>
@@ -54,6 +53,7 @@
     {% if downloads.excel %}<a class="btn" href="{{ url_for('review.download', task_id=task_id, kind='excel') }}">Download Excel</a>{% endif %}
     {% if downloads.pdf %}<a class="btn" href="{{ url_for('review.download', task_id=task_id, kind='pdf') }}">Highlighted PDF</a>{% endif %}
     {% if downloads.summary %}<a class="btn" href="{{ url_for('review.download', task_id=task_id, kind='summary') }}">Summary (.txt)</a>{% endif %}
+    <a class="btn" href="{{ url_for('review.download_all', task_id=task_id) }}" title="Results, by-products, logs and review files in one ZIP">Download all (ZIP)</a>
     <a class="btn" href="{{ url_for('review.social_card', task_id=task_id) }}">Social media card</a>
     <a class="btn primary" href="{{ url_for('review.validate_page', task_id=task_id) }}">{{ 'Edit validation' if validated else 'Review and validate' }}</a>
   </div>

@@ -70,7 +70,6 @@ document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('clic
     await navigator.clipboard.writeText(b.dataset.copy);
     b.classList.add('copied');
     const old = b.textContent;
-    if (b.classList.contains('btn')) b.textContent = 'Copied';
     setTimeout(() => { b.classList.remove('copied'); b.textContent = old; }, 1200);
   } catch (e) { /* clipboard blocked: the value stays selectable */ }
 }));
