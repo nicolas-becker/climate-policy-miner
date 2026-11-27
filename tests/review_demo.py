@@ -128,7 +128,7 @@ def build_app():
             review.save_pipeline_snapshot(TASK_ID, pdf, 'Example_Updated_NDC_3.0.pdf', records(),
                                           {'summary_sections': {'executive_summary': 'Pipeline summary text.',
                                                                 'key_findings': ['Converts 1,000 kt to 1 Mt CO2eq']},
-                                           'summary_text': ''}, 10, 42.0)
+                                           'summary_text': ''}, 10, 444.4, 182340)
     return app
 
 

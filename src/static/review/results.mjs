@@ -63,3 +63,14 @@ if (CFG.hasPdf) {
     })
     .catch((e) => { document.getElementById('viewer').innerHTML = `<div class="banner bad">The PDF could not be shown: ${String(e.message).replace(/</g, '&lt;')}</div>`; });
 }
+
+// run statistics: click to copy
+document.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(b.dataset.copy);
+    b.classList.add('copied');
+    const old = b.textContent;
+    if (b.classList.contains('btn')) b.textContent = 'Copied';
+    setTimeout(() => { b.classList.remove('copied'); b.textContent = old; }, 1200);
+  } catch (e) { /* clipboard blocked: the value stays selectable */ }
+}));

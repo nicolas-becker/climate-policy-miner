@@ -18,6 +18,11 @@ const FIELD_LABEL = {
   benefit: 'Type of benefit',
 };
 const LOCAL_KEY = `review:${CFG.taskId}`;
+// Rows from the extraction pipeline are stored as source "pipeline" and shown as "miner".
+const sourceLabel = (s) => (!s || s === 'pipeline' ? 'miner' : s);
+// Transport targets get their own tag colour, as on the results page.
+const tagOf = (r) => (r.domain === 'targets' && /^Transport sector/.test(r.target_area || '')
+  ? ['transport-target', 'Transport target'] : [r.domain, TAG_LABEL[r.domain]]);
 
 let state = null;
 let tax = null;
@@ -328,7 +333,7 @@ function renderFilters() {
     ['flagged', `Flagged ${count((r) => r.status === 'flagged')}`],
     ['missing', `Missing field ${count((r) => missingOf(r).length)}`, true],
     ['notfound', `Not found in PDF ${count((r) => r.pdf_found === false)}`, true],
-    ...(sources.length > 1 ? sources.map((s) => [`source:${s}`, `${s} ${count((r) => r.source === s)}`]) : []),
+    ...(sources.length > 1 ? sources.map((s) => [`source:${s}`, `${sourceLabel(s)} ${count((r) => r.source === s)}`]) : []),
   ];
   $('#filters').innerHTML = chips.map(([k, label, warn]) =>
     `<button class="chip ${warn ? 'warn' : ''}" aria-pressed="${ui.filter === k}" data-filter="${esc(k)}">${esc(label)}</button>`).join('');
@@ -373,8 +378,8 @@ function renderRows() {
 function cardHtml(r) {
   const miss = missingOf(r);
   return `<button type="button" class="rowcard ${miss.length ? 'missing' : ''}" data-open="${r.id}">
-    <span class="meta"><span class="tag ${r.domain}">${TAG_LABEL[r.domain]}</span>${statusPill(r)}
-      <span class="tag">${esc(r.source || 'n/a')}</span>${checkText(r)}
+    <span class="meta"><span class="tag ${tagOf(r)[0]}">${tagOf(r)[1]}</span>${statusPill(r)}
+      <span class="tag">${esc(sourceLabel(r.source))}</span>${checkText(r)}
       <span class="mono" style="margin-left:auto">p. ${esc(r.page ?? '?')}</span></span>
     <span class="quote">“${esc(r.verbatim || '(no quote yet)')}”</span>
     <span class="labels">${esc(labelLine(r))}${miss.length ? ` <b style="color:#7A2E12">Missing: ${esc(miss.map((m) => FIELD_LABEL[m] || m).join(', '))}</b>` : ''}</span>
@@ -397,8 +402,8 @@ function editorHtml(r) {
     ? `<label class="field ${miss.includes(f) ? 'missing' : ''}">Target year (required)<input data-f="target_year" value="${esc(r.target_year)}" placeholder="e.g. 2035"></label>`
     : selectHtml(r, f, miss))).join('');
   return `<div class="editor ${r.status}" data-editor="${r.id}">
-    <div class="meta row-flex small"><span class="tag ${r.domain}">${TAG_LABEL[r.domain]}</span>${statusPill(r)}
-      <span class="tag">${esc(r.source || 'n/a')}</span>${checkText(r)}
+    <div class="meta row-flex small"><span class="tag ${tagOf(r)[0]}">${tagOf(r)[1]}</span>${statusPill(r)}
+      <span class="tag">${esc(sourceLabel(r.source))}</span>${checkText(r)}
       <label style="margin-left:auto; display:flex; gap:6px; align-items:center">p.<input data-f="page" type="number" min="1" value="${esc(r.page ?? '')}" style="width:64px;height:30px;border:1px solid var(--line-strong);border-radius:6px;padding:0 6px"></label></div>
     <div class="grid g2">
       <label class="field">Verbatim quote (exported)<textarea data-f="verbatim" rows="3">${esc(r.verbatim)}</textarea></label>

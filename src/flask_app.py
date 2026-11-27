@@ -1802,7 +1802,8 @@ def process_document(task_id, file_path, query_terms, filename, document_pages=N
 
         # Write rows, summary and a copy of the PDF to disk for the validation and results pages
         save_pipeline_snapshot(task_id, file_path, filename, classified.to_dict('records'),
-                               summary_data, document_pages, time.time() - total_start_time)
+                               summary_data, document_pages, time.time() - total_start_time,
+                               total_tokens_used)
         
         postprocessing_time = time.time() - step_start_time
         processing_tasks[task_id]["progress"] = 100

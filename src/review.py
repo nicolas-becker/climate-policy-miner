@@ -389,7 +389,7 @@ def version_number(doc):
 # ---------------------------------------------------------------------------
 
 def save_pipeline_snapshot(task_id, file_path, filename, classified_records, summary_data,
-                           document_pages=None, runtime_seconds=None):
+                           document_pages=None, runtime_seconds=None, tokens_used=None):
     """Called at the end of process_document(). Never raises."""
     try:
         folder = review_dir(task_id)
@@ -403,6 +403,7 @@ def save_pipeline_snapshot(task_id, file_path, filename, classified_records, sum
             'filename': filename,
             'document_pages': document_pages,
             'runtime_seconds': runtime_seconds,
+            'tokens_used': tokens_used,
             'document': default_document(filename),
             'rows': rows_from_pipeline(classified_records),
             'summary': _summary_for_json(summary_data),
@@ -435,7 +436,7 @@ def load_snapshot(task_id):
     records = (task.get('partial_results') or {}).get('classified_quotes') or []
     save_pipeline_snapshot(task_id, task.get('file_path'), task.get('original_filename'),
                            records, task.get('summary'), task.get('document_pages'),
-                           task.get('total_runtime_seconds'))
+                           task.get('total_runtime_seconds'), task.get('total_tokens_used'))
     return _read_json(os.path.join(review_dir(task_id), 'pipeline.json'))
 
 
@@ -608,13 +609,14 @@ def results_context(task_id, state):
         'edited': sum(1 for r in rows if r.get('edited')),
         'removed': sum(1 for r in all_rows if r.get('deleted')),
         'added': sum(1 for r in rows if r.get('source') not in ('pipeline',)),
-        'sources': sorted({r.get('source') for r in rows if r.get('source') not in ('pipeline',)}),
+        'sources': sorted({source_label(r.get('source')) for r in rows if r.get('source') not in ('pipeline',)}),
         'missing': len(missing_fields(rows)),
     }
 
     doc = effective_document(state.get('document'))
     return {
         'task_id': task_id,
+        'run': run_stats(state, pages),
         'state': state,
         'doc': doc,
         'version_number': version_number(doc),
@@ -636,6 +638,30 @@ def results_context(task_id, state):
         'has_pdf': source_pdf_path(task_id) is not None,
         'downloads': available_downloads(task_id, bool(state.get('validated'))),
     }
+
+
+def run_stats(state, pages):
+    """Monitoring figures of the pipeline run (empty for reviews started without one)."""
+    secs = state.get('runtime_seconds')
+    tokens = state.get('tokens_used')
+    runtime = ''
+    if isinstance(secs, (int, float)):
+        m, s = divmod(int(round(secs)), 60)
+        runtime = f'{m} min {s} s'
+    return {
+        'pages': pages or '',
+        'runtime': runtime,
+        'tokens': f'{int(tokens):,}' if isinstance(tokens, (int, float)) else '',
+        'tokens_raw': str(int(tokens)) if isinstance(tokens, (int, float)) else '',
+    }
+
+
+TRANSPORT_TARGET_AREAS = ('Transport sector mitigation target', 'Transport sector adaptation target')
+
+
+def source_label(source):
+    """Display name of a row source: rows from the pipeline are shown as 'miner'."""
+    return 'miner' if source in ('pipeline', '', None) else source
 
 
 REQUIRED = {
@@ -705,6 +731,15 @@ ROW_LABEL_FIELDS = {
     'adaptation': ['adaptation_category', 'adaptation_measure'],
     'benefits': ['benefit'],
 }
+
+
+@review_bp.app_template_filter('rowtag')
+def rowtag(row):
+    """(css class, label) of a row's tag: transport targets get their own colour."""
+    d = row.get('domain')
+    if d == 'targets' and row.get('target_area') in TRANSPORT_TARGET_AREAS:
+        return ('transport-target', 'Transport target')
+    return (d, {'targets': 'Target', 'mitigation': 'Mitigation', 'adaptation': 'Adaptation', 'benefits': 'Benefit'}.get(d, d))
 
 
 @review_bp.app_template_filter('rowlabels')
@@ -1029,7 +1064,7 @@ def write_excel(state, path):
               [])
     missing = {r['id']: m for r, m in missing_fields(rows)}
     for r in rows:
-        s.append([r['id'], r['domain'], r['status'], r['source'], 'yes' if r.get('edited') else '',
+        s.append([r['id'], r['domain'], r['status'], source_label(r['source']), 'yes' if r.get('edited') else '',
                   r['page'], r['verbatim'], r['translation'], r['note'], ', '.join(missing.get(r['id'], []))])
     s.append([])
     s.append(['Document language', doc.get('language', '')])
