@@ -1,0 +1,17 @@
+{% extends 'review_base.html' %}
+{% block title %}Validate a document | Transport Policy Miner{% endblock %}
+{% block section %}VALIDATION{% endblock %}
+{% block content %}
+<section class="panel" style="max-width: 760px; display: flex; flex-direction: column; gap: 16px">
+  <h1 style="font-size: 22px">Review a document without running the pipeline</h1>
+  <p style="margin: 0; line-height: 1.6">Use this to continue a review you saved earlier, or to check an extraction made with Claude, ChatGPT or another tool. Upload the PDF and, if you have one, the JSON file with the rows. You can add more sources later on the validation page.</p>
+  {% if error %}<div class="banner bad">{{ error }}</div>{% endif %}
+  <form method="post" enctype="multipart/form-data" style="display: flex; flex-direction: column; gap: 14px">
+    <label class="field">PDF document (required)<input type="file" name="pdf_file" accept="application/pdf" required style="height: auto; padding: 8px"></label>
+    <label class="field">Rows as JSON (optional)<input type="file" name="json_file" accept="application/json,.json" style="height: auto; padding: 8px"></label>
+    <label class="field">Name of the source, e.g. claude or chatgpt (optional)<input type="text" name="source_name" placeholder="Used when the file does not say where the rows come from"></label>
+    <div class="row-flex"><button class="btn primary" type="submit">Open validation page</button>
+      <a href="{{ url_for('static', filename='review/validation-json.md') }}" target="_blank">JSON format and a prompt for Claude or ChatGPT</a></div>
+  </form>
+</section>
+{% endblock %}

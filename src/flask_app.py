@@ -55,11 +55,13 @@ try:
     from .quotation_utils import get_quotes
     from .classification_utils import tagging_classifier_quotes
     from .general_utils import create_highlighted_pdf, _sanitize_for_json
+    from .review import init_review, save_pipeline_snapshot, results_page as review_results_page, load_snapshot
 except ImportError:
     # Fallback for direct execution
     from quotation_utils import get_quotes
     from classification_utils import tagging_classifier_quotes
     from general_utils import create_highlighted_pdf, _sanitize_for_json
+    from review import init_review, save_pipeline_snapshot, results_page as review_results_page, load_snapshot
 
 LOCAL = False  # Set to True for local development
 
@@ -136,6 +138,9 @@ def get_task_results_folder(task_id):
         str: Path to task-specific results folder
     """
     return os.path.join(app.config['UPLOAD_FOLDER'], f'results_{task_id}')
+
+# Validation page, new results page, social media card, GitHub issue links (see review.py)
+init_review(app, processing_tasks, get_task_results_folder, LLM)
 
 def cleanup_old_task_results(age_hours=24):
     """
@@ -1576,6 +1581,7 @@ def process_document(task_id, file_path, query_terms, filename, document_pages=N
             "estimated_time_minutes": estimated_minutes,
             "document_pages": document_pages,
             "results_folder": task_results_folder,  # Store the results folder path
+            "file_path": file_path,  # Analysed PDF, used by the validation page
             "log_file": task_log_file  # Store the log file path
         }
         
@@ -1793,6 +1799,11 @@ def process_document(task_id, file_path, query_terms, filename, document_pages=N
         task_logger.info(f"Saving results to: {output_folder}")
 
         postprocess_results(file_path, classified, filename, task_id, summary_data)
+
+        # Write rows, summary and a copy of the PDF to disk for the validation and results pages
+        save_pipeline_snapshot(task_id, file_path, filename, classified.to_dict('records'),
+                               summary_data, document_pages, time.time() - total_start_time,
+                               total_tokens_used)
         
         postprocessing_time = time.time() - step_start_time
         processing_tasks[task_id]["progress"] = 100
@@ -2078,6 +2089,14 @@ def results(task_id):
     """
     task = processing_tasks.get(task_id)
 
+    # New results page, built from the rows saved on disk (pipeline or reviewed)
+    if (task and task.get("result") is not None) or not task:
+        try:
+            if load_snapshot(task_id) is not None:
+                return review_results_page(task_id)
+        except Exception as e:
+            app.logger.error(f"[RESULTS {task_id}] New results page failed, using legacy page: {e}")
+
     if task and task.get("result") is not None:
         citations = task.get("result", [])
         original_filename = task.get("original_filename", "analysis")
@@ -2164,7 +2183,7 @@ def results(task_id):
         document_pages = task.get("document_pages", "N/A")
 
         return render_template(
-            'results.html',
+            'results_legacy.html',
             citations=processed_citations, # NEW: Use processed citations
             classification_data=classified_quotes, # Now sanitized
             summary_data=summary_data, # NEW

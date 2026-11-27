@@ -1,0 +1,9 @@
+{% extends 'review_base.html' %}
+{% block title %}Results not found | Transport Policy Miner{% endblock %}
+{% block content %}
+<section class="panel" style="max-width: 640px; display: flex; flex-direction: column; gap: 12px">
+  <h1 style="font-size: 22px">These results are no longer on the server</h1>
+  <p style="margin: 0; line-height: 1.6">Results are kept for 24 hours and are lost when the app restarts. If you saved a review file (JSON), you can continue from it: upload the PDF and the review file on the <a href="{{ url_for('review.validate_start') }}">validation start page</a>.</p>
+  <p class="muted small mono" style="margin: 0">Task {{ task_id }}</p>
+</section>
+{% endblock %}
