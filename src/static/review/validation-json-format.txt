@@ -1,0 +1,126 @@
+TRANSPORT POLICY MINER: REVIEW FILE FORMAT (ndc-tracker-validation/1)
+=====================================================================
+
+The validation page reads and writes one JSON file per document. You can
+import such a file on the validation page ("Add or import rows") or start a
+review from it at /validate. Files from other tools are accepted as long as
+they contain rows; unknown fields are ignored.
+
+
+1. Minimal file
+---------------
+
+{
+  "rows": [
+    {"domain": "targets", "verbatim": "reduce GHG emissions by 30% below BAU by 2035", "page": 14},
+    {"domain": "mitigation", "verbatim": "installation of approximately 5,000 charging points", "page": 109}
+  ]
+}
+
+Also accepted:
+  - a plain list of rows: [ {...}, {...} ]
+  - rows grouped by sheet: {"targets": [...], "mitigation": [...], "adaptation": [...], "benefits": [...]}
+
+
+2. Row fields
+-------------
+
+Common to all rows
+  domain           targets | mitigation | adaptation | benefits
+  verbatim         exact quote from the PDF (this is what gets exported)
+  page             page number in the PDF (number of the PDF page, not the printed page label)
+  translation      English translation, for checking only (optional)
+  source           where the row comes from, e.g. "claude", "chatgpt" (optional)
+  status           pending | confirmed | flagged (optional; confirmed/flagged booleans also work)
+  note             free text (optional)
+
+Targets
+  target_area      Net zero target | Overall mitigation target | Transport sector mitigation target |
+                   Transport sector adaptation target | Energy sector target
+  target_scope     Overall mitigation target | Sector-wide | Subsector targets | Unclear scope
+  ghg_target       GHG | Non-GHG
+  target_type      see taxonomy, e.g. "GHG: BAU", "Zero emission vehicle targets", "Mode share targets"
+  conditionality   Unconditional | Conditional | Unclear conditionality
+  target_year      e.g. 2035
+
+Mitigation
+  category         Mode shift and demand management | Transport system improvements | Energy efficiency |
+                   Electrification | Alternative fuels | Aviation and maritime
+  purpose          see taxonomy
+  instrument       see taxonomy
+  asi              Avoid | Shift | Improve | Avoid, shift | Avoid, improve | Shift, improve | Avoid, shift, improve
+
+Adaptation
+  adaptation_category   Structural and Technical | Informational and Educational |
+                        Institutional and Regulatory | Other adaptation and resilience measures
+  adaptation_measure    see taxonomy
+
+Benefits
+  benefit          Air pollution reduction | Congestion reduction | Better social inclusion | Health Benefits |
+                   Improved accessibility | Road safety improvements | SDG referenced in NDC transport measures |
+                   Economic benefits
+
+The full list of values is in /static/review/taxonomy/ndc_taxonomy.json
+(NDC Transport Tracker taxonomy, version 4.0).
+
+
+3. Document details (optional)
+------------------------------
+
+"document": {
+  "document_id": "", "country_code": "KEN", "country": "Kenya",
+  "type_of_document": "NDC", "document_name": "Updated NDC 3.0",
+  "last_submission": "Third Generation NDC", "generation": "3", "version": "0",
+  "date": "2026-08-15", "status": "Active", "language": "English",
+  "url": "https://unfccc.int/...", "note": ""
+}
+
+The export writes "Version number" as "<type> <generation>.<version>", e.g. "NDC 3.0".
+
+
+4. Prompt for Claude or ChatGPT
+-------------------------------
+
+Attach the PDF and paste this prompt. Save the answer as a .json file and
+import it on the validation page with the source name "claude" or "chatgpt".
+
+--- prompt starts ---
+You are a climate policy analyst. Read the attached climate policy document
+(an NDC or a long-term strategy) and extract every passage about transport:
+targets, mitigation measures, adaptation measures and stated co-benefits.
+
+Rules:
+- Copy each passage word for word from the document. Do not shorten,
+  paraphrase or translate the "verbatim" text. One passage per row.
+- "page" is the PDF page number (first page of the file = 1), not the
+  page label printed on the page.
+- If the document is not in English, add an English translation in
+  "translation".
+- Classify each row only with the values listed below. Leave a field empty
+  ("") if the passage does not say it. Do not guess a target year.
+- A passage can appear in more than one domain (for example a target that
+  is also a mitigation measure): then add one row per domain.
+- Answer with JSON only, no explanation, in this structure:
+
+{"rows": [
+  {"domain": "targets", "verbatim": "...", "page": 1, "translation": "",
+   "target_area": "", "target_scope": "", "ghg_target": "", "target_type": "",
+   "conditionality": "", "target_year": ""},
+  {"domain": "mitigation", "verbatim": "...", "page": 1, "translation": "",
+   "category": "", "purpose": "", "instrument": "", "asi": ""},
+  {"domain": "adaptation", "verbatim": "...", "page": 1, "translation": "",
+   "adaptation_category": "", "adaptation_measure": ""},
+  {"domain": "benefits", "verbatim": "...", "page": 1, "translation": "",
+   "benefit": ""}
+]}
+
+Allowed values:
+target_area: Net zero target, Overall mitigation target, Transport sector mitigation target, Transport sector adaptation target, Energy sector target
+target_scope: Overall mitigation target, Sector-wide, Subsector targets, Unclear scope
+ghg_target: GHG, Non-GHG
+conditionality: Unconditional, Conditional, Unclear conditionality
+category: Mode shift and demand management, Transport system improvements, Energy efficiency, Electrification, Alternative fuels, Aviation and maritime
+asi: Avoid, Shift, Improve, Avoid, shift, Avoid, improve, Shift, improve, Avoid, shift, improve
+adaptation_category: Structural and Technical, Informational and Educational, Institutional and Regulatory, Other adaptation and resilience measures
+benefit: Air pollution reduction, Congestion reduction, Better social inclusion, Health Benefits, Improved accessibility, Road safety improvements, SDG referenced in NDC transport measures, Economic benefits
+--- prompt ends ---

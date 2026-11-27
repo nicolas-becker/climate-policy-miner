@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Transport Policy Miner{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='review/review.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="/"><b>Transport Policy Miner</b><span>{% block section %}{% endblock %}</span></a>
+    <nav class="site-nav">
+      <a href="/">New analysis</a>
+      <a href="{{ url_for('review.validate_start') }}">Validate a document</a>
+      <a href="{% block issue_url %}{{ report_issue_url() }}{% endblock %}" target="_blank" rel="noopener">Report a problem</a>
+    </nav>
+  </div>
+</header>
+<main class="page">
+{% block content %}{% endblock %}
+</main>
+{% block scripts %}{% endblock %}
+</body>
+</html>

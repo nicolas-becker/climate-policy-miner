@@ -1,0 +1,125 @@
+{% extends 'review_base.html' %}
+{% block title %}Validate {{ filename }} | Transport Policy Miner{% endblock %}
+{% block section %}VALIDATION{% endblock %}
+{% block issue_url %}{{ report_issue_url(task_id=task_id, filename=filename, step='validation') }}{% endblock %}
+{% block head %}
+<style>
+  .topbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 22px; }
+  .work { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+  .rows-col { flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+  .viewer-col { flex: 1 1 520px; min-width: 0; position: sticky; top: 12px; }
+  .rowcard { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; text-align: left; width: 100%; }
+  .rowcard:hover { border-color: var(--line-strong); }
+  .rowcard.missing { border-color: var(--bad-line); }
+  .rowcard .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; }
+  .rowcard .quote { font-size: 14px; line-height: 1.45; }
+  .rowcard .labels { font-size: 12px; color: var(--muted); }
+  .editor { background: #FFFDF8; border: 2px solid var(--ink); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .editor.flagged { border-color: var(--flag); background: #FFF9EF; }
+  .editor.confirmed { border-color: var(--mitigation); background: #FAFDF2; }
+  .st-confirmed { background: #E9F3D0; color: var(--ok-ink); }
+  .st-flagged { background: #FFF1DC; color: #7A4A00; border: 1px solid var(--flag); }
+  .st-pending { background: #EEF3F5; color: var(--muted); }
+  .found { color: var(--ok-ink); } .notfound { color: var(--bad); }
+  dialog { border: 1px solid var(--line); border-radius: 12px; padding: 20px; max-width: 720px; width: calc(100% - 32px); color: var(--ink); }
+  dialog::backdrop { background: rgba(21, 55, 67, .35); }
+  details.docpanel > summary { cursor: pointer; list-style: none; }
+  details.docpanel > summary::-webkit-details-marker { display: none; }
+  .savestate { font-size: 12px; color: var(--muted); }
+</style>
+{% endblock %}
+{% block content %}
+<section class="topbar">
+  <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+    <h1>{{ filename or 'Untitled document' }}</h1>
+    <span class="savestate" id="savestate">Loading…</span>
+  </div>
+  <div class="row-flex">
+    <button class="btn" type="button" id="btn-import">Add or import rows</button>
+    <button class="btn" type="button" id="btn-download">Save draft (JSON)</button>
+    <a class="btn" href="{{ url_for('review.results_page', task_id=task_id) }}">Back to results</a>
+    <button class="btn primary" type="button" id="btn-finish">Finish and rebuild results</button>
+  </div>
+</section>
+
+<div id="banner"></div>
+
+<details class="panel docpanel" id="docpanel" open>
+  <summary class="spread"><h2>Document details <span class="muted" style="font-weight: 400; font-size: 13px">(one row in the Document sheet)</span></h2><span class="small muted" id="doc-toggle-hint">Hide</span></summary>
+  <div id="doc-fields" style="display: flex; flex-direction: column; gap: 14px; margin-top: 14px"></div>
+</details>
+
+<section class="spread" style="align-items: center">
+  <div class="row-flex" role="tablist" id="tabs"></div>
+  <div class="row-flex" id="filters"></div>
+</section>
+
+<section class="work">
+  <div class="rows-col">
+    <div class="row-flex" style="justify-content: space-between">
+      <span class="small muted" id="list-info"></span>
+      <button class="btn small" type="button" id="btn-add">+ Add empty row</button>
+    </div>
+    <div id="rows" style="display: flex; flex-direction: column; gap: 10px"></div>
+  </div>
+  <div class="viewer-col">
+    {% if has_pdf %}
+    <div class="viewer" id="viewer">
+      <div class="viewer-bar">
+        <span>Page <input data-page-input type="number" min="1" value="1" aria-label="Page number"> of <span data-page-count>…</span></span>
+        <span class="row-flex" style="gap: 6px">
+          <button type="button" data-zoom-out aria-label="Zoom out">−</button>
+          <button type="button" data-zoom-in aria-label="Zoom in">+</button>
+          <button type="button" data-prev aria-label="Previous page">‹</button>
+          <button type="button" data-next aria-label="Next page">›</button>
+        </span>
+      </div>
+      <div class="viewer-scroll" data-viewer-scroll><p style="padding: 24px">Loading PDF…</p></div>
+      <div class="viewer-foot">
+        <span data-viewer-status></span>
+        <span class="row-flex" style="gap: 12px">
+          <button type="button" class="btn small hidden" id="btn-from-selection">New row from selected text</button>
+          <a href="{{ url_for('review.serve_pdf', task_id=task_id) }}" target="_blank" rel="noopener">Open full PDF</a>
+        </span>
+      </div>
+    </div>
+    {% else %}
+    <div class="banner warn">The PDF for this review is not on the server anymore, so the preview and the quote check are not available. You can still edit the rows.</div>
+    {% endif %}
+  </div>
+</section>
+
+<dialog id="import-dialog">
+  <form method="dialog" style="display: flex; flex-direction: column; gap: 12px">
+    <h2 style="font-size: 18px">Add or import rows</h2>
+    <p class="muted" style="margin: 0; line-height: 1.5">Paste JSON or choose a file. The format is described in <a href="{{ url_for('static', filename='review/validation-json-format.txt') }}" target="_blank">validation-json-format.txt</a>, which also has a prompt for Claude or ChatGPT.</p>
+    <label class="field">JSON file<input type="file" id="imp-file" accept=".json,application/json" style="height: auto; padding: 8px"></label>
+    <label class="field">or paste JSON<textarea id="imp-text" rows="8" placeholder='{"rows": [{"domain": "targets", "verbatim": "...", "page": 12}]}'></textarea></label>
+    <label class="field">Source name<input id="imp-source" placeholder="e.g. claude, chatgpt, colleague"></label>
+    <fieldset style="border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px">
+      <legend class="small">What to do with the rows already loaded</legend>
+      <label><input type="radio" name="imp-mode" value="add" checked> Keep them and add these rows as another source</label>
+      <label><input type="radio" name="imp-mode" value="replace"> Replace everything with this file (rows and document details)</label>
+    </fieldset>
+    <div id="imp-error" class="banner bad hidden"></div>
+    <div class="row-flex" style="justify-content: flex-end">
+      <button class="btn" value="cancel" type="submit">Cancel</button>
+      <button class="btn primary" type="button" id="imp-go">Import</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}
+<script>
+  window.REVIEW = {
+    taskId: {{ task_id|tojson }},
+    hasPdf: {{ 'true' if has_pdf else 'false' }},
+    stateUrl: {{ url_for('review.get_state', task_id=task_id)|tojson }},
+    finalizeUrl: {{ url_for('review.finalize', task_id=task_id)|tojson }},
+    pdfUrl: {{ url_for('review.serve_pdf', task_id=task_id)|tojson }},
+    taxonomyUrl: {{ url_for('static', filename='review/taxonomy/ndc_taxonomy.json')|tojson }},
+  };
+</script>
+<script type="module" src="{{ url_for('static', filename='review/validate.mjs') }}"></script>
+{% endblock %}

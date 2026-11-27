@@ -188,6 +188,10 @@
                             <button id="copy-error-btn" class="btn btn-outline-secondary btn-sm" onclick="copyErrorToClipboard()">
                                 📋 Copy Error Details
                             </button>
+                            <a id="report-issue-btn" class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener"
+                               href="{{ report_issue_url(task_id=task_id, filename=original_filename, step='processing') }}">
+                                Report this problem on GitHub
+                            </a>
                         </div>
                         
                         <!-- Traceback container -->
@@ -434,6 +438,18 @@ URL: ${window.location.href}
         function showErrorMessage(title, message, suggestions, isProcessingError, traceback = null, hasPartialResults = false) {
             console.log('showErrorMessage called with:', {title, message, hasPartialResults});
             isShowingError = true;
+            // Add the error message to the pre-filled GitHub issue
+            try {
+                const issueBtn = document.getElementById('report-issue-btn');
+                if (issueBtn) {
+                    const u = new URL(issueBtn.href);
+                    const body = (u.searchParams.get('body') || '') +
+                        '\n\n<details><summary>Error message</summary>\n\n```\n' +
+                        String(title || '') + '\n' + String(message || '').slice(0, 1500) + '\n```\n</details>';
+                    u.searchParams.set('body', body);
+                    issueBtn.href = u.toString();
+                }
+            } catch (e) { console.warn('Could not add error to issue link', e); }
             
             // Hide progress container
             //const progressContainer = document.querySelector('.progress-container');

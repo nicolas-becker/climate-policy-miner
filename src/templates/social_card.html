@@ -1,0 +1,78 @@
+{% extends 'review_base.html' %}
+{% block title %}Social media card | Transport Policy Miner{% endblock %}
+{% block section %}SOCIAL MEDIA CARD{% endblock %}
+{% block issue_url %}{{ report_issue_url(task_id=task_id, filename=ctx.filename, step='social card') }}{% endblock %}
+{% block head %}
+<style>
+  .maker { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+  .maker .controls { flex: 0 1 400px; min-width: 280px; display: flex; flex-direction: column; gap: 14px; }
+  .maker .out { flex: 1 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  fieldset { border: 1px solid var(--line); border-radius: 10px; background: #fff; padding: 12px 16px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  legend { font-size: 12px; font-weight: 600; padding: 0 4px; }
+  .point { display: grid; grid-template-columns: 20px 1fr 70px; gap: 6px; align-items: start; }
+  .point input[type=text] { height: 32px; border: 1px solid var(--line-strong); border-radius: 6px; padding: 0 8px; font-size: 13px; min-width: 0; }
+  canvas#card { width: 100%; height: auto; border-radius: 8px; box-shadow: 0 1px 4px rgba(21, 55, 67, .2); background: #153743; }
+  .count.over { color: var(--bad); font-weight: 600; }
+  .out textarea { font-weight: 400; }
+</style>
+{% endblock %}
+{% block content %}
+<section class="spread">
+  <div><h1 style="font-size: 22px">Social media card</h1><span class="small muted">Built from the results of {{ ctx.filename }}</span></div>
+  <a href="{{ url_for('review.results_page', task_id=task_id) }}">Back to results</a>
+</section>
+
+<section class="maker">
+  <div class="controls">
+    <fieldset>
+      <legend>Format</legend>
+      <label><input type="radio" name="fmt" value="landscape" checked> Landscape 1200 × 675 (LinkedIn and Bluesky)</label>
+      <label><input type="radio" name="fmt" value="square"> Square 1080 × 1080</label>
+    </fieldset>
+    <fieldset>
+      <legend>Heading</legend>
+      <label class="field">Country<input id="f-country" value="{{ card.country }}" placeholder="Country name"></label>
+      <label class="field">Line below<input id="f-sub" value="{{ card.document_name }}{{ (', ' ~ card.date) if card.date }}"></label>
+    </fieldset>
+    <fieldset>
+      <legend>Key points (up to 3, editable)</legend>
+      <div id="points" style="display: flex; flex-direction: column; gap: 8px">
+        {% for p in card.points %}
+        <div class="point"><input type="checkbox" {{ 'checked' if loop.index <= 3 }} aria-label="Use this point">
+          <input type="text" value="{{ p.text }}" aria-label="Point text"><input type="text" value="{{ p.page }}" aria-label="Page reference"></div>
+        {% endfor %}
+        {% for i in range(3 - (card.points|length if card.points|length < 3 else 3)) %}
+        <div class="point"><input type="checkbox" aria-label="Use this point"><input type="text" placeholder="Write a key point" aria-label="Point text"><input type="text" placeholder="p. 12" aria-label="Page reference"></div>
+        {% endfor %}
+      </div>
+      <label style="padding-top: 6px; border-top: 1px solid #EAF2F5"><input type="checkbox" id="f-asi" {{ 'checked' if card.asi.values()|sum }}> Show the Avoid, Shift, Improve chart</label>
+    </fieldset>
+    <div class="banner {{ 'ok' if card.validated else 'warn' }}">
+      {% if card.validated %}The card carries the stamp "Reviewed by an analyst".
+      {% else %}These results have not been validated, so the card is stamped "Preliminary: AI-extracted, not reviewed". <a href="{{ url_for('review.validate_page', task_id=task_id) }}">Validate first</a> to remove it.{% endif %}
+    </div>
+  </div>
+
+  <div class="out">
+    <canvas id="card" width="1200" height="675" role="img" aria-label="Preview of the social media card"></canvas>
+    <div class="grid g2">
+      <label class="field" style="font-weight: 600">LinkedIn post<textarea id="t-linkedin" rows="8"></textarea></label>
+      <label class="field" style="font-weight: 600">Bluesky post <span class="count" id="bsky-count"></span><textarea id="t-bluesky" rows="8"></textarea></label>
+    </div>
+    <label class="field" style="font-weight: 600">Image description (alt text)<textarea id="t-alt" rows="3"></textarea></label>
+    <div class="row-flex">
+      <button class="btn primary" type="button" id="b-png">Download image (PNG)</button>
+      <button class="btn" type="button" data-copy="t-linkedin">Copy LinkedIn text</button>
+      <button class="btn" type="button" data-copy="t-bluesky">Copy Bluesky text</button>
+      <button class="btn" type="button" data-copy="t-alt">Copy alt text</button>
+    </div>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+  window.CARD = {{ {'validated': card.validated, 'asi': card.asi, 'filename': ctx.filename,
+                    'link': 'changing-transport.org/tracker'}|tojson }};
+</script>
+<script type="module" src="{{ url_for('static', filename='review/social_card.mjs') }}"></script>
+{% endblock %}

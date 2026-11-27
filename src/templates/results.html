@@ -1,981 +1,226 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Results - {{ original_filename }} - Transport Policy Miner</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <style>
-    .quote-item {
-      border-left: 3px solid #198754;
-      padding-left: 15px;
-      margin-bottom: 10px;
-    }
-    .quote-context {
-      color: #6c757d;
-      font-size: 0.9em;
-    }
-    .quote-text {
-      font-style: italic;
-      font-weight: 500;
-    }
-    .badge-quotes {
-      background-color: #198754;
-      color: white;
-      margin-left: 8px;
-    }
-    .document-name {
-      color: #6c757d;
-      font-size: 0.9em;
-      margin-bottom: 0;
-    }
-    /* Custom classification badge colors */
-    .badge-target {
-      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important;
-      color: #0d47a1 !important;
-      border: 1px solid #2196f3 !important;
-      font-weight: 500;
-    }
-    .badge-mitigation {
-      background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%) !important;
-      color: #e65100 !important;
-      border: 1px solid #ff9800 !important;
-      font-weight: 500;
-    }
-    .badge-adaptation {
-      background: linear-gradient(135deg, #fff3e0 0%, #ffcc80 100%) !important;
-      color: #bf360c !important;
-      border: 1px solid #ff5722 !important;
-      font-weight: 500;
-    }
-    /* Hover effects for badges */
-    .badge-target:hover {
-      background: #bbdefb !important;
-      transform: scale(1.05);
-      transition: all 0.2s ease;
-    }
-    .badge-mitigation:hover {
-      background: #ffecb3 !important;
-      transform: scale(1.05);
-      transition: all 0.2s ease;
-    }
-    .badge-adaptation:hover {
-      background: #ffcc80 !important;
-      transform: scale(1.05);
-      transition: all 0.2s ease;
-    }
-    /* Verified quote styling */
-    .verified-quote {
-        border-left: 4px solid #198754;
-        background-color: #f8fff8;
-        border: 1px solid #d4edda;
-    }
-
-    /* Unverified quote styling */
-    .unverified-quote {
-        border-left: 4px solid #dc3545;
-        background-color: #fff5f5;
-        border: 1px solid #f5c2c7;
-    }
-
-    .verified-quote .quote-text {
-        font-style: italic;
-        font-weight: 500;
-        color: #198754;
-    }
-
-    .unverified-quote .quote-text {
-        font-style: italic;
-        font-weight: 500;
-        color: #dc3545;
-    }
-
-    /* Badge hover effects */
-    .badge:hover {
-        transform: scale(1.05);
-        transition: all 0.2s ease;
-    }
-
-    /* Quote context styling */
-    .quote-context {
-        color: #6c757d;
-        font-size: 0.9em;
-    }
-
-    /* Verification badge styling */
-    .verification-badge .badge {
-        font-size: 0.75em;
-        padding: 0.25em 0.5em;
-    }
-
-    .excel-preview {
-        max-height: 400px;
-        overflow: auto;
-        border: 1px solid #dee2e6;
-        border-radius: 0.375rem;
-    }
-
-    .excel-table {
-        margin: 0;
-    }
-
-    .excel-table th {
-        background-color: #f8f9fa;
-        position: sticky;
-        top: 0;
-        z-index: 10;
-        font-weight: 600;
-        font-size: 0.9em;
-    }
-
-    .excel-table td {
-        font-size: 0.85em;
-        max-width: 300px;
-        word-wrap: break-word;
-    }
-
-    .verification-verified {
-        background-color: #d4edda !important;
-        color: #155724 !important;
-    }
-
-    .verification-unverified {
-        background-color: #f8d7da !important;
-        color: #721c24 !important;
-    }
-
-    .nav-pills .nav-link {
-        color: #495057;
-        background-color: #f8f9fa;
-        border: 1px solid #dee2e6;
-        margin-right: 0.25rem;
-    }
-
-    .nav-pills .nav-link.active {
-        background-color: #198754;
-        border-color: #198754;
-    }
-    .excel-table td {
-        font-size: 0.85em;
-        max-width: 300px;
-        word-wrap: break-word;
-        position: relative; /* ✅ Enable absolute positioning for button */
-        padding-right: 35px !important; /* ✅ Make room for copy button */
-    }
-    .cell-copy-btn {
-        position: absolute;
-        right: 5px;
-        top: 50%;
-        transform: translateY(-50%);
-        opacity: 0;
-        transition: opacity 0.2s ease;
-        padding: 2px 6px;
-        font-size: 0.75em;
-        background: linear-gradient(135deg, #198754 0%, #20c997 100%);
-        border: none;
-        color: white;
-        border-radius: 3px;
-        cursor: pointer;
-        z-index: 5;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-    .cell-copy-btn:hover {
-        background: linear-gradient(135deg, #157347 0%, #1ab386 100%);
-        transform: translateY(-50%) scale(1.05);
-    }
-    .excel-table td:hover .cell-copy-btn {
-        opacity: 1;
-    }
-    /* Copy notification toast */
-    .copy-toast {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: linear-gradient(135deg, #198754 0%, #20c997 100%);
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        z-index: 9999;
-        animation: slideIn 0.3s ease, slideOut 0.3s ease 2.7s;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-
-    @keyframes slideIn {
-        from {
-            transform: translateX(400px);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
-    }
-
-    @keyframes slideOut {
-        from {
-            transform: translateX(0);
-            opacity: 1;
-        }
-        to {
-            transform: translateX(400px);
-            opacity: 0;
-        }
-    }
-
-    .copy-toast i {
-        font-size: 1.2em;
-    }
-  </style>
-</head>
-<body class="bg-light">
-  <div class="container py-5">
-    <h1 class="mb-2 text-center">🔍 Extracted Content & Quotes</h1>
-    <p class="document-name text-center">Document: <strong>{{ original_filename }}</strong></p>
-    <p class="text-center text-muted small mb-4">Task ID: <code>{{ task_id }}</code></p>
-    
-    {% if total_runtime and total_tokens %}
-    <div class="text-center mb-4">
-      <div class="card mx-auto" style="max-width: 500px;">
-        <div class="card-body py-2">
-          <div class="row">
-            <div class="col-4">
-              <small class="text-muted">Document Pages:</small><br>
-              <strong class="text-info">{{ document_pages if document_pages else 'N/A' }}</strong>
-            </div>
-            <div class="col-4">
-              <small class="text-muted">Processing Time:</small><br>
-              <strong class="text-primary">{{ total_runtime }}</strong>
-            </div>
-            <div class="col-4">
-              <small class="text-muted">AI Tokens Used:</small><br>
-              <strong class="text-success">{{ total_tokens }}</strong>
-            </div>
-          </div>
-        </div>
-      </div>
+{% extends 'review_base.html' %}
+{% block title %}Results {{ filename }} | Transport Policy Miner{% endblock %}
+{% block section %}RESULTS{% endblock %}
+{% block issue_url %}{{ report_issue_url(task_id=task_id, filename=filename, step='results') }}{% endblock %}
+{% set dlabel = {'targets': 'Target', 'mitigation': 'Mitigation', 'adaptation': 'Adaptation', 'benefits': 'Benefit'} %}
+{% block head %}
+<style>
+  .kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 1000px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .kpi { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+  .kpi .lbl { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+  .kpi .lbl i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .kpi .num { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .kpi .sub { font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .details-row { display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: baseline; }
+  .details-row .k { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; }
+  .details-row .v { font-size: 14px; font-weight: 500; }
+  .two { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  .finding { display: flex; gap: 12px; align-items: flex-start; padding-top: 12px; border-top: 1px solid #EAF2F5; line-height: 1.55; }
+  .bar-row { display: grid; grid-template-columns: 18px minmax(0, 190px) 1fr 28px; gap: 8px; align-items: center; font-size: 13px; }
+  .bar-row button { border: 0; background: none; padding: 0; cursor: pointer; color: var(--muted); }
+  .bar { height: 12px; background: #EEF5F7; border-radius: 3px; } .bar span { display: block; height: 12px; background: var(--mitigation); border-radius: 3px; }
+  .instr { margin: 4px 0 4px 26px; padding: 8px 12px; background: #F6FAEB; border-radius: 8px; font-size: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .stack { display: flex; height: 22px; border-radius: 4px; overflow: hidden; font-size: 11px; font-weight: 600; }
+  .stack span { display: flex; align-items: center; padding-left: 6px; white-space: nowrap; overflow: hidden; }
+  .card { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
+  .card.active { border-color: var(--mitigation); background: #F6FAEB; }
+  .card .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; }
+  .pageref a { font-family: var(--mono); font-size: 12px; }
+</style>
+{% endblock %}
+{% block content %}
+<section class="spread" style="align-items: flex-end; gap: 16px">
+  <div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+    <div class="row-flex">
+      {% if validated %}<span class="pill ok">Validated on {{ (validated_at or '')[:10] }}</span>
+      {% else %}<span class="pill warn">Not validated</span>{% endif %}
+      <span class="small muted">{% if pages %}{{ pages }} pages{% endif %}{% if state.created %}, processed {{ state.created[:10] }}{% endif %}</span>
     </div>
-    {% endif %}
+    <h1 style="font-size: 28px; letter-spacing: -.01em; overflow-wrap: anywhere">{{ filename }}</h1>
+  </div>
+  <div class="row-flex">
+    {% if downloads.excel %}<a class="btn" href="{{ url_for('review.download', task_id=task_id, kind='excel') }}">Download Excel</a>{% endif %}
+    {% if downloads.pdf %}<a class="btn" href="{{ url_for('review.download', task_id=task_id, kind='pdf') }}">Highlighted PDF</a>{% endif %}
+    {% if downloads.summary %}<a class="btn" href="{{ url_for('review.download', task_id=task_id, kind='summary') }}">Summary (.txt)</a>{% endif %}
+    <a class="btn" href="{{ url_for('review.social_card', task_id=task_id) }}">Social media card</a>
+    <a class="btn primary" href="{{ url_for('review.validate_page', task_id=task_id) }}">{{ 'Edit validation' if validated else 'Review and validate' }}</a>
+  </div>
+</section>
 
-    {% if summary_data and summary_data.summary_sections %}
-    <div class="card mb-5 shadow-sm">
-        <div class="card-header bg-primary text-white">
-            <div class="d-flex justify-content-between align-items-center">
-                <h4 class="mb-0">📊 AI-Generated Summary & Insights</h4>
-                <span class="badge bg-light text-dark">
-                    {{ summary_data.statistics.total_quotes }} quotes analyzed
-                </span>
-            </div>
-        </div>
-        <div class="card-body">
+<section class="panel" style="padding: 14px 20px; display: flex; flex-direction: column; gap: 10px">
+  <div class="details-row">
+    {% set country = (doc.country or '') ~ ((' (' ~ doc.country_code ~ ')') if doc.country_code else '') %}
+    {% for k, v in [('Country', country), ('Type of document', doc.type_of_document), ('Document name', doc.document_name),
+                    ('Last submission', doc.last_submission), ('Generation', doc.generation), ('Version', doc.version),
+                    ('Date', doc.date), ('Status', doc.status), ('Language', doc.language)] %}
+      <div style="display: flex; flex-direction: column; gap: 2px"><span class="k">{{ k }}</span><span class="v">{{ v or 'not set' }}</span></div>
+    {% endfor %}
+    <a href="{{ url_for('review.validate_page', task_id=task_id) }}" style="margin-left: auto; font-size: 13px">Edit document details</a>
+  </div>
+  <p class="small muted" style="margin: 0; padding-top: 10px; border-top: 1px solid #EAF2F5; line-height: 1.5">
+    <b style="color: var(--ink)">Transport content:</b>
+    transport target {{ flags.transport_target }}{% if flags.contains_transport_mitigation_target == 'yes' %} ({{ flags.summary_transport_target }}, {{ flags.ghg_transport_target_type }}){% endif %},
+    mitigation measures {{ flags.contains_transport_mitigation_measures }}, adaptation measures {{ flags.contains_transport_adaptation_measures }},
+    adaptation target {{ flags.contains_transport_adaptation_target }}.
+    {% if not flags.contains_just_transition %}Benefits and just transition still need a manual check.{% endif %}
+  </p>
+</section>
 
-            <!-- Executive Summary -->
-            {% if summary_data.summary_sections.executive_summary %}
-            <div class="mb-4">
-                <h5 class="text-primary mb-3">📋 Executive Summary</h5>
-                <div class="alert alert-primary bg-light border-primary">
-                    <p class="mb-0 lead">{{ summary_data.summary_sections.executive_summary }}</p>
-                </div>
-            </div>
-            {% endif %}
+{% if validated %}
+<div class="banner ok row-flex" style="justify-content: space-between">
+  <span>Reviewed by a person: {{ review.confirmed }} rows confirmed, {{ review.edited }} edited, {{ review.removed }} removed{% if review.added %}, {{ review.added }} added{% if review.sources %} ({{ review.sources|join(', ') }}){% endif %}{% endif %}. Downloads are rebuilt from the reviewed rows.</span>
+  {% if review.missing %}<span style="color: #7A2E12; font-weight: 600">{{ review.missing }} rows still miss a required field. <a href="{{ url_for('review.validate_page', task_id=task_id, filter='missing') }}">Open them</a></span>{% endif %}
+</div>
+{% else %}
+<div class="banner warn">These results come straight from the pipeline and have not been checked by a person. Use them for a quick overview. For figures you plan to publish, review them first.</div>
+{% endif %}
 
-            <!-- Key Findings -->
-            {% if summary_data.summary_sections.key_findings %}
-            <div class="mb-4">
-                <h5 class="text-success mb-3">🔍 Key Findings</h5>
-                <ul class="list-group list-group-flush">
-                    {% for finding in summary_data.summary_sections.key_findings %}
-                    <li class="list-group-item border-0 ps-0">
-                        <i class="fas fa-check-circle text-success me-2"></i>
-                        {{ finding }}
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-            {% endif %}
-            
-            <!-- ✅ Economy-wide Targets - ALWAYS SHOW -->
-            <div class="mb-4">
-                <h5 class="mb-3" style="color: #6f42c1;">
-                    🎯 Economy-wide Targets 
-                    <span class="badge" style="background-color: #6f42c1; font-size: 0.7em;">
-                        {{ summary_data.statistics.categorized_counts.economy_wide_targets }} found
-                    </span>
-                </h5>
-                <div class="alert alert-light border" style="border-color: #6f42c1 !important;">
-                    {% if summary_data.summary_sections.economy_wide_targets %}
-                        <ul class="mb-0">
-                            {% for target in summary_data.summary_sections.economy_wide_targets %}
-                            <li class="mb-2">{{ target }}</li>
-                            {% endfor %}
-                        </ul>
-                    {% else %}
-                        <p class="mb-0 text-muted">No specific economy-wide targets identified in this document.</p>
-                    {% endif %}
-                </div>
-            </div>
+<section class="kpis">
+  {% set cond = conditionality %}
+  <div class="kpi"><span class="lbl"><i style="background: var(--targets)"></i>Target passages</span><span class="num">{{ counts.targets }}</span>
+    <span class="sub">{{ cond.get('Unconditional', 0) }} unconditional, {{ cond.get('Conditional', 0) }} conditional</span></div>
+  <div class="kpi"><span class="lbl"><i style="background: var(--mitigation)"></i>Mitigation passages</span><span class="num">{{ counts.mitigation }}</span>
+    <span class="sub">{% if categories %}{{ categories[0].label }} most frequent{% else %}None found{% endif %}</span></div>
+  <div class="kpi"><span class="lbl"><i style="background: var(--adaptation)"></i>Adaptation passages</span><span class="num">{{ counts.adaptation }}</span>
+    <span class="sub">{% if counts.adaptation %}Classified by category and measure{% else %}None found{% endif %}</span></div>
+  <div class="kpi"><span class="lbl"><i style="background: var(--benefits)"></i>Benefits</span>
+    {% if counts.benefits or validated %}<span class="num">{{ counts.benefits }}</span><span class="sub">Added in validation</span>
+    {% else %}<span class="num">n/a</span><span class="sub">Not extracted yet, add them in validation</span>{% endif %}</div>
+  <div class="kpi"><span class="lbl"><i style="background: #83C8D1"></i>Quotes found in PDF</span>
+    {% if quote_check.checked %}<span class="num">{{ quote_check.verified }} / {{ quote_check.checked }}</span>
+    <span class="sub">{{ quote_check.checked - quote_check.verified }} not found word for word</span>
+    {% else %}<span class="num">n/a</span><span class="sub">Not checked yet</span>{% endif %}</div>
+</section>
+<p class="small muted" style="margin: -8px 0 0">Counts are extracted passages. The same measure can be mentioned in several places, so the number of distinct measures is usually lower.</p>
 
-            <!-- ✅ Transport Targets - ALWAYS SHOW -->
-            <div class="mb-4">
-                <h5 class="mb-3" style="color: #0d47a1;">
-                    🚗 Transport Sector Targets 
-                    <span class="badge" style="background-color: #0d47a1; font-size: 0.7em;">
-                        {{ summary_data.statistics.categorized_counts.transport_targets }} found
-                    </span>
-                </h5>
-                <div class="alert alert-light border" style="border-color: #0d47a1 !important;">
-                    {% if summary_data.summary_sections.transport_targets %}
-                        <ul class="mb-0">
-                            {% for target in summary_data.summary_sections.transport_targets %}
-                            <li class="mb-2">{{ target }}</li>
-                            {% endfor %}
-                        </ul>
-                    {% else %}
-                        <p class="mb-0 text-muted">No specific transport sector targets identified in this document.</p>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- ✅ Mitigation Actions - ALWAYS SHOW -->
-            <div class="mb-4">
-                <h5 class="mb-3" style="color: #e65100;">
-                    🛡️ Mitigation Actions 
-                    <span class="badge" style="background-color: #e65100; font-size: 0.7em;">
-                        {{ summary_data.statistics.categorized_counts.mitigation_actions }} found
-                    </span>
-                </h5>
-                <div class="alert alert-light border" style="border-color: #e65100 !important;">
-                    {% if summary_data.summary_sections.mitigation_actions %}
-                        <ul class="mb-0">
-                            {% for action in summary_data.summary_sections.mitigation_actions %}
-                            <li class="mb-2">{{ action }}</li>
-                            {% endfor %}
-                        </ul>
-                    {% else %}
-                        <p class="mb-0 text-muted">No specific mitigation actions identified in this document.</p>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- ✅ Adaptation Actions - ALWAYS SHOW -->
-            <div class="mb-4">
-                <h5 class="mb-3" style="color: #bf360c;">
-                    🌿 Adaptation Actions 
-                    <span class="badge" style="background-color: #bf360c; font-size: 0.7em;">
-                        {{ summary_data.statistics.categorized_counts.adaptation_actions }} found
-                    </span>
-                </h5>
-                <div class="alert alert-light border" style="border-color: #bf360c !important;">
-                    {% if summary_data.summary_sections.adaptation_actions %}
-                        <ul class="mb-0">
-                            {% for action in summary_data.summary_sections.adaptation_actions %}
-                            <li class="mb-2">{{ action }}</li>
-                            {% endfor %}
-                        </ul>
-                    {% else %}
-                        <p class="mb-0 text-muted">No specific adaptation actions identified in this document.</p>
-                    {% endif %}
-                </div>
-            </div>
-            
-            <!-- Raw Summary (Fallback) -->
-            {% if not summary_data.summary_sections.executive_summary and summary_data.summary_text %}
-            <div class="mb-4">
-                <h5 class="text-secondary mb-3">📄 AI Analysis</h5>
-                <div class="border rounded p-3 bg-light">
-                    <pre class="mb-0" style="white-space: pre-wrap; font-family: inherit;">{{ summary_data.summary_text }}</pre>
-                </div>
-            </div>
-            {% endif %}
-
-            <!-- Generation Info -->
-            <div class="row mt-4 pt-3 border-top">
-                <div class="col-md-6">
-                    <small class="text-muted">
-                        <i class="fas fa-robot me-1"></i>
-                        Generated using AI analysis of {{ summary_data.statistics.total_quotes }} extracted quotes
-                    </small>
-                </div>
-                <div class="col-md-6 text-end">
-                    <small class="text-muted">
-                        <i class="fas fa-coins me-1"></i>
-                        Tokens used: {{ summary_data.tokens_used }}
-                    </small>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- ✅ Hidden element to safely pass JSON data to JavaScript -->
-    {% if classification_data %}
-    <script type="application/json" id="classification-data">{{ classification_data | tojson | safe }}</script>
-    {% endif %}
-
-    <!-- ✅ NEW: Embedded Excel Preview Section -->
-    <div class="card mb-5 shadow-sm">
-        <div class="card-header bg-success text-white">
-            <div class="d-flex justify-content-between align-items-center">
-                <h4 class="mb-0">📊 Results Spreadsheet Preview</h4>
-                  <a href="{{ url_for('download_results', task_id=task_id, filename=original_filename) }}"  
-                  class="btn btn-light btn-sm">
-                    <i class="fas fa-download me-1"></i>
-                    Download Full Results
-                </a>
-            </div>
-        </div>
-        <div class="card-body">
-            <div class="row mb-3">
-                <div class="col-md-12">
-                    <p class="mb-2">
-                        <strong>📋 Spreadsheet Contents:</strong> This preview shows your complete analysis results 
-                        organized in separate sheets for easy review.
-                    </p>
-                    
-                    <!-- Sheet tabs simulation -->
-                    <ul class="nav nav-pills mb-3" id="excel-tabs" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="targets-tab" data-bs-toggle="pill" 
-                                    data-bs-target="#targets-content" type="button" role="tab">
-                                🎯 Targets
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="mitigation-tab" data-bs-toggle="pill" 
-                                    data-bs-target="#mitigation-content" type="button" role="tab">
-                                🛡️ Mitigation
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="adaptation-tab" data-bs-toggle="pill" 
-                                    data-bs-target="#adaptation-content" type="button" role="tab">
-                                🌿 Adaptation
-                            </button>
-                        </li>
-                    </ul>
-
-                    <!-- Tab content -->
-                    <div class="tab-content" id="excel-content">
-                        <!-- Targets Sheet -->
-                        <div class="tab-pane fade show active" id="targets-content" role="tabpanel">
-                            <div class="excel-preview">
-                                <div id="targets-table-container">
-                                    <p class="text-muted">
-                                        <i class="fas fa-spinner fa-spin me-2"></i>
-                                        Loading targets data...
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Mitigation Sheet -->
-                        <div class="tab-pane fade" id="mitigation-content" role="tabpanel">
-                            <div class="excel-preview">
-                                <div id="mitigation-table-container">
-                                    <p class="text-muted">
-                                        <i class="fas fa-spinner fa-spin me-2"></i>
-                                        Loading mitigation data...
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Adaptation Sheet -->
-                        <div class="tab-pane fade" id="adaptation-content" role="tabpanel">
-                            <div class="excel-preview">
-                                <div id="adaptation-table-container">
-                                    <p class="text-muted">
-                                        <i class="fas fa-spinner fa-spin me-2"></i>
-                                        Loading adaptation data...
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="alert alert-info mt-3">
-                        <i class="fas fa-info-circle me-2"></i>
-                        <strong>Note:</strong> This is a preview of your results. Download the complete Excel file 
-                        for full functionality including sorting, filtering, and conditional formatting.
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {% if citations %}
-      <!-- Main Citations Accordion -->
-      <div class="accordion mb-5" id="citationsAccordion">
-        {% for index, item in citations.items() %}
-          <div class="accordion-item mb-2">
-            <h2 class="accordion-header" id="heading{{ loop.index }}">
-              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                data-bs-target="#collapse{{ loop.index }}" aria-expanded="false"
-                aria-controls="collapse{{ loop.index }}">
-                <div>
-                  Page {{ item.page_number }} - Relevance: {{ '%.2f' | format(item.score) }}
-                  {% if item.quotes and item.quotes|length > 0 %}
-                    <span class="badge rounded-pill badge-quotes">{{ item.quotes|length }} result(s)</span>
-                  {% endif %}
-                </div>
-              </button>
-            </h2>
-            <div id="collapse{{ loop.index }}" class="accordion-collapse collapse" aria-labelledby="heading{{ loop.index }}" data-bs-parent="#citationsAccordion">
-              <div class="accordion-body">
-                <!-- Quotes Section -->
-                {% if item.quotes and item.quotes|length > 0 %}
-                  <div class="card mb-3">
-                    <div class="card-header text-white d-flex justify-content-between align-items-center"
-                        style="background: linear-gradient(135deg, #198754 0%, #20c997 100%);">
-                      <h5 class="mb-0"> Extracted Quotes</h5>
-                      <div>
-                        <span class="badge bg-light text-dark me-1">{{ item.quotes|length }} total</span>
-                        {% set verified_count = item.quotes|selectattr('2', 'equalto', true)|list|length %}
-                        {% set unverified_count = item.quotes|length - verified_count %}
-                        {% if verified_count > 0 %}
-                          <span class="badge bg-success">{{ verified_count }} verified</span>
-                        {% endif %}
-                        {% if unverified_count > 0 %}
-                          <span class="badge bg-danger">{{ unverified_count }} unverified</span>
-                        {% endif %}
-                      </div>
-                    </div>
-                    <div class="card-body">
-                      <div class="quote-list">
-                        {% for quote in item.quotes %}
-                          {% set quote_index = quote[0] %}
-                          {% set quote_text = quote[1] %}
-                          {% set is_verified = quote[2] if quote|length > 2 else true %}
-                          
-                          <div class="quote-item mb-3 p-3 rounded {% if is_verified %}verified-quote{% else %}unverified-quote{% endif %}">
-                            <div class="quote-header d-flex justify-content-between align-items-start mb-2">
-                              <div class="verification-badge">
-                                {% if is_verified %}
-                                  <span class="badge bg-success me-2">✓ Verified</span>
-                                {% else %}
-                                  <span class="badge bg-danger me-2">⚠ Unverified</span>
-                                {% endif %}
-                              </div>
-                              <small class="text-muted">Position: {{ quote_index }}</small>
-                            </div>  
-                            
-                            <div class="quote-text {% if is_verified %}text-dark{% else %}text-danger{% endif %}">
-                              {{ quote_text }}
-                            </div>        
-                            
-                            {% if not is_verified %}
-                              <div class="alert alert-warning mt-2 py-2">
-                                <small>
-                                  <strong>⚠ Attention:</strong> This quote could not be verified in the original document. It may contain minor text extraction issues 
-                                  (missing spaces, footnotes, etc.). Please verify against the original document.
-                                </small>
-                              </div>
-                            {% endif %}
-
-                            <!-- Add classification badges if available -->
-                            {% if classification_data %}
-                              <div class="quote-classification mt-2">
-                                {% for class_item in classification_data %}
-                                  {% if class_item.quote == quote_text %}
-                                    {% if class_item.target == 'True' %}
-                                      <span class="badge badge-target me-1">🎯 Target</span>
-                                    {% endif %}
-                                    {% if class_item.mitigation_measure == 'True' %}
-                                      <span class="badge badge-mitigation me-1">
-                                        🛡️ Mitigation
-                                        {% if class_item.instrument %}
-                                          ({{ class_item.instrument }})
-                                        {% endif %}
-                                      </span>
-                                    {% endif %}
-                                    {% if class_item.adaptation_measure == 'True' %}
-                                      <span class="badge badge-adaptation me-1">🌿 Adaptation</span>
-                                    {% endif %}
-                                  {% endif %}
-                                {% endfor %}
-                              </div>
-                            {% endif %}
-                          </div>
-                        {% endfor %}
-                      </div>
-                    </div>
-                  </div>
-                {% endif %}
-                <!-- Citation full text display -->
-                <div class="card">
-                  <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Full Context</h5>
-                  </div>
-                  <div class="card-body">
-                    <p class="text-pre-wrap">{{ item.content }}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
+<section class="two">
+  <div class="panel" style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+    <div class="spread"><h2>What this document commits to</h2>
+      <span class="mono small muted">{% if summary and summary.based_on == 'reviewed' %}AI SUMMARY OF REVIEWED ROWS, LINKED TO SOURCES{% else %}AI SUMMARY OF UNCHECKED ROWS{% endif %}</span></div>
+    {% if summary and summary.sections %}
+      {% set sec = summary.sections %}
+      {% if sec.executive_summary %}<p style="margin: 0; font-size: 15px; line-height: 1.6">{{ sec.executive_summary|pagelinks }}</p>{% endif %}
+      {% for item in sec.key_findings or [] %}
+        <div class="finding"><span class="tag" style="flex: none">Key finding</span><div>{{ item|pagelinks }}</div></div>
+      {% endfor %}
+      {% set parts = [('economy_wide_targets', 'Economy-wide', 'targets'), ('transport_targets', 'Transport target', 'targets'), ('mitigation_actions', 'Mitigation', 'mitigation'), ('adaptation_actions', 'Adaptation', 'adaptation'), ('benefits', 'Benefit', 'benefits')] %}
+      <details>
+        <summary style="cursor: pointer; padding-top: 10px; border-top: 1px solid #EAF2F5">Details by area</summary>
+        {% for key, label, cls in parts %}{% for item in sec.get(key) or [] %}
+          <div class="finding"><span class="tag {{ cls }}" style="flex: none">{{ label }}</span><div>{{ item|pagelinks }}</div></div>
+        {% endfor %}{% endfor %}
+      </details>
+      {% if summary.based_on != 'reviewed' %}<p class="small muted" style="margin: 0">Page references appear once the rows have been validated and the summary is rebuilt.</p>{% endif %}
     {% else %}
-      <div class="alert alert-warning">No citations found.</div>
+      <p class="muted" style="margin: 0">No AI summary for this document yet. It is written when you finish the validation.</p>
     {% endif %}
-
-    <div class="mt-4 d-flex justify-content-between">
-      <a href="{{ url_for('index') }}" onclick="releaseQueueSlot('{{ task_id }}')" class="btn btn-secondary">🔄 Analyze Another Document</a>
-      <a href="{{ url_for('download_results', task_id=task_id, filename=original_filename) }}" class="btn btn-primary">📥 Download Results</a>
-    </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="https://kit.fontawesome.com/your-fontawesome-kit.js" crossorigin="anonymous"></script>
-  
-  <script>
-  const taskId = '{{ task_id }}';
-  const original_filename = '{{ original_filename }}';
-  const downloadUrl = `{{ url_for('download_results', task_id=task_id, filename=original_filename) }}`;
-  let heartbeatInterval;
+  <div class="panel" style="flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+    <h2>Mitigation by type</h2>
+    {% if categories %}
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      {% for c in categories %}
+      <div>
+        <div class="bar-row">
+          <button type="button" aria-expanded="{{ 'true' if loop.first else 'false' }}" aria-controls="instr-{{ loop.index }}" data-toggle="instr-{{ loop.index }}">{{ '▾' if loop.first else '▸' }}</button>
+          <span>{{ c.label }}</span><div class="bar"><span style="width: {{ c.pct }}%"></span></div>
+          <b style="text-align: right">{{ c.n }}</b>
+        </div>
+        <div class="instr {{ '' if loop.first else 'hidden' }}" id="instr-{{ loop.index }}">
+          {% for name, n in c.instruments %}<div class="spread"><span>{{ name }}</span><b>{{ n }}</b></div>{% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="muted" style="margin: 0">No mitigation passages.</p>{% endif %}
 
-  function startHeartbeat(taskId) {
-      heartbeatInterval = setInterval(() => {
-          fetch(`/api/heartbeat/${taskId}`, {method: 'POST'})
-              .catch(err => {
-                  console.log('Heartbeat failed:', err);
-                  clearInterval(heartbeatInterval);
-              });
-      }, 30000); // Every 30 seconds
-  }
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <h3 style="font-size: 14px">Avoid, Shift, Improve <span class="muted" style="font-weight: 400">(mitigation passages)</span></h3>
+      {% if asi_total %}
+      <div class="stack">
+        {% for k, bg, fg in [('Avoid', '#153743', '#fff'), ('Shift', '#5FA8B6', '#0C2730'), ('Improve', '#D3E4E9', '#153743')] %}
+          {% if asi[k] %}<span style="width: {{ (100 * asi[k] / asi_total)|round(1) }}%; background: {{ bg }}; color: {{ fg }}" title="{{ k }} {{ asi[k] }}">{{ k }} {{ asi[k] }}</span>{% endif %}
+        {% endfor %}
+      </div>
+      {% else %}<p class="small muted" style="margin: 0">No A-S-I labels.</p>{% endif %}
+    </div>
 
-  // Auto-download with notification
-  window.addEventListener('DOMContentLoaded', function() {
-      // Show notification
-      showDownloadNotification();
-      
-      // Start download after brief delay
-      setTimeout(() => {
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <h3 style="font-size: 14px">Targets: conditional or not?</h3>
+      {% set ctotal = cond.values()|sum %}
+      {% if ctotal %}
+      <div class="stack">
+        {% for k, short, bg, fg in [('Unconditional', 'Uncond.', '#153743', '#fff'), ('Conditional', 'Conditional', '#5FA8B6', '#0C2730'), ('Unclear conditionality', 'Unclear', '#D3E4E9', '#153743')] %}
+          {% if cond.get(k) %}<span style="width: {{ (100 * cond[k] / ctotal)|round(1) }}%; background: {{ bg }}; color: {{ fg }}" title="{{ k }} {{ cond[k] }}">{{ short }} {{ cond[k] }}</span>{% endif %}
+        {% endfor %}
+      </div>
+      {% else %}<p class="small muted" style="margin: 0">No target passages.</p>{% endif %}
+    </div>
+  </div>
+</section>
 
-          // Create hidden link and trigger download (works without pop-up blocking)
-          const downloadLink = document.createElement('a');
-          downloadLink.href = downloadUrl;
-          downloadLink.download = '{{ original_filename }}_results'; // Suggests filename
-          downloadLink.style.display = 'none';
-          document.body.appendChild(downloadLink);
-          downloadLink.click();
-          document.body.removeChild(downloadLink);
-          
-          console.log('Auto-download started');
-      }, 2000); // 2 second delay to show notification
-  });
+<section class="panel" style="display: flex; flex-direction: column; gap: 12px">
+  <div class="spread"><h2>Where the findings are in the document</h2>
+    <div class="legend"><span><i style="background: var(--targets)"></i>Targets</span><span><i style="background: var(--mitigation)"></i>Mitigation</span><span><i style="background: var(--adaptation)"></i>Adaptation</span><span><i style="background: var(--benefits)"></i>Benefits</span><span>One bar per page, coloured by the most frequent type. Click to open it.</span></div></div>
+  <div style="overflow-x: auto"><div class="page-strip" style="min-width: {{ [strip|length * 4, 600]|max }}px">
+    {% for p in strip %}<a href="#preview" data-goto="{{ p.page }}" class="{{ p.domain }}" style="height: {{ p.h }}%" title="Page {{ p.page }}: {{ p.n }} passages" aria-label="Page {{ p.page }}, {{ p.n }} passages"></a>{% endfor %}
+  </div></div>
+</section>
 
-  function showDownloadNotification() {
-      // Create notification element
-      const notification = document.createElement('div');
-      notification.className = 'alert alert-info alert-dismissible fade show position-fixed';
-      notification.style.cssText = 'top: 20px; right: 20px; z-index: 1050; max-width: 300px;';
-      notification.innerHTML = `
-          <strong>📥 Download Starting...</strong><br>
-          Your results will download automatically in 2 seconds.
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-      `;
-      
-      document.body.appendChild(notification);
-      
-      // Auto-remove notification after 5 seconds
-      setTimeout(() => {
-          if (notification.parentNode) {
-              notification.remove();
-          }
-      }, 5000);
-  }
-
-  // Release queue on page unload (browser close)
-  window.addEventListener('beforeunload', function() {
-      if (taskId) { 
-          navigator.sendBeacon(`/api/release-slot/${taskId}`, '');
-      }
-  });
-
-  // Start heartbeat for current task
-  startHeartbeat(taskId);
-  
-  function releaseQueueSlot(taskId) {
-      // Release queue slot when user starts new analysis
-      fetch(`/api/release-slot/${taskId}`, {method: 'POST'})
-          .catch(err => console.log('Queue release error:', err));
-  }
-
-  // Excel sheet preview
-  document.addEventListener('DOMContentLoaded', function() {
-      console.log('Initializing Excel preview...');
-    
-      // NEW: Copy to clipboard function
-      function copyToClipboard(text, event) {
-          // Use modern Clipboard API
-          navigator.clipboard.writeText(text).then(() => {
-              showCopyNotification();
-              
-              // Visual feedback on button
-              const btn = event.target;
-              const originalHTML = btn.innerHTML;
-              btn.innerHTML = '<i class="fas fa-check"></i>';
-              btn.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
-              
-              setTimeout(() => {
-                  btn.innerHTML = originalHTML;
-                  btn.style.background = '';
-              }, 1000);
-              
-          }).catch(err => {
-              console.error('Copy failed:', err);
-              // Fallback for older browsers
-              fallbackCopy(text);
-          });
-      }
-
-      // Fallback copy method for older browsers
-      function fallbackCopy(text) {
-          const textarea = document.createElement('textarea');
-          textarea.value = text;
-          textarea.style.position = 'fixed';
-          textarea.style.opacity = '0';
-          document.body.appendChild(textarea);
-          textarea.select();
-          
-          try {
-              document.execCommand('copy');
-              showCopyNotification();
-          } catch (err) {
-              console.error('Fallback copy failed:', err);
-              alert('Copy failed. Please copy manually.');
-          }
-          
-          document.body.removeChild(textarea);
-      }
-
-      // Show copy notification toast
-      function showCopyNotification() {
-          const toast = document.createElement('div');
-          toast.className = 'copy-toast';
-          toast.innerHTML = `
-              <i class="fas fa-check-circle"></i>
-              <span><strong>Copied!</strong> Cell content copied to clipboard</span>
-          `;
-          document.body.appendChild(toast);
-          
-          setTimeout(() => {
-              toast.remove();
-          }, 3000);
-      }
-
-      // Function to create table HTML from data
-      function createTable(data, columns, tableId) {
-          console.log(`Creating table ${tableId} with ${data ? data.length : 0} rows`);
-
-          if (!data || data.length === 0) {
-              return '<p class="text-muted p-3">No data available for this category.</p>';
-          }
-
-          let html = `<table class="table table-sm table-striped excel-table" id="${tableId}">`;
-          
-          // Header
-          html += '<thead><tr>';
-          columns.forEach(col => {
-              html += `<th>${col.display}</th>`;
-          });
-          html += '</tr></thead>';
-          
-          // Body
-          html += '<tbody>';
-          data.forEach(row => {
-              html += '<tr>';
-              columns.forEach(col => {
-                  let cellContent = row[col.field] || '';
-                  let cellClass = '';
-                  
-                  // Apply verification status styling
-                  if (col.field === 'verification_status') {
-                      cellClass = cellContent === 'Verified' ? 'verification-verified' : 'verification-unverified';
-                  }
-
-                  // Store original content BEFORE escaping HTML
-                  const originalContent = String(cellContent);
-                  
-                  // Escape HTML to prevent issues
-                  cellContent = String(cellContent).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                  
-                  // Add copy button to each cell
-                  html += `<td class="${cellClass}" data-copy-text="${originalContent.replace(/"/g, '&quot;')}">
-                      ${cellContent}
-                      <button class="cell-copy-btn" onclick="copyCellContent(event)" title="Copy cell content">
-                          <i class="fas fa-copy"></i>
-                      </button>
-                  </td>`;
-              });
-              html += '</tr>';
-          });
-          html += '</tbody></table>';
-          
-          return html;
-      }
-
-      // Make copy function globally accessible
-      window.copyCellContent = function(event) {
-          event.stopPropagation(); // Prevent row selection if you add that later
-          const cell = event.target.closest('td');
-          const textToCopy = cell.getAttribute('data-copy-text');
-          copyToClipboard(textToCopy, event);
-      };
-
-      // Safe JSON parsing with error handling
-      let classificationData = [];
-      try {
-          // Get the classification data from the template
-          const classificationDataElement = document.getElementById('classification-data');
-          if (classificationDataElement) {
-              classificationData = JSON.parse(classificationDataElement.textContent);
-              console.log('Classification data loaded:', classificationData.length, 'rows (may include duplicates with different instruments)');
-          } else {
-              console.log('No classification data element found or empty');
-              classificationData = [];
-          }
-      } catch (error) {
-          console.error('Error loading classification data:', error);
-          classificationData = [];
-      }
-      
-      // Prepare data for each sheet
-      const targetsData = [];
-      const mitigationData = [];
-      const adaptationData = [];
-
-      // Process EACH row independently (no overwriting)
-      if (Array.isArray(classificationData)) {
-          classificationData.forEach(item => {
-              const baseItem = {
-                  quote: item.quote || '',
-                  page: item.page || '',
-                  verification_status: item.verification_status || 'Verified'
-              };
-
-              // Targets
-              if (item.target === 'True') {
-                  targetsData.push({
-                      ...baseItem,
-                      target_area: item.target_area || '',
-                      ghg_target: item.ghg_target || '',
-                      conditionality: item.conditionality || '',
-                      target_scope: '',
-                      target_type: '',
-                      target_year: ''
-                  });
-              }
-
-              // Mitigation - Each instrument classification becomes a separate row
-              if (item.mitigation_measure === 'True') {
-                  mitigationData.push({
-                      ...baseItem,
-                      category: item.category || '',
-                      purpose: item.purpose || '',
-                      instrument: item.instrument || '',  // each row has ONE instrument
-                      asi: item.asi || ''
-                  });
-              }
-
-              // Adaptation - Same logic
-              if (item.adaptation_measure === 'True') {
-                  adaptationData.push({
-                      ...baseItem,
-                      category: item.category || '',
-                      measure: item.instrument || ''
-                  });
-              }
-          });
-      }
-
-      console.log('Data prepared:', {
-          targets: targetsData.length,
-          mitigation: mitigationData.length,
-          adaptation: adaptationData.length,
-          total_rows: classificationData.length
-      });
-
-      // Enhanced logging for multi-instrument detection
-      const totalClassifications = targetsData.length + mitigationData.length + adaptationData.length;
-      const uniqueQuotes = new Set(classificationData.map(d => d.quote)).size;
-      const multiInstrumentCount = classificationData.length - uniqueQuotes;
-      if (multiInstrumentCount > 0) {
-          console.log(`✓ Multi-instrument quotes correctly displayed: ${multiInstrumentCount} additional rows for quotes with multiple classifications`);
-      }
-
-      // Define column configurations
-      const targetsColumns = [
-          {field: 'target_area', display: 'Target Area'},
-          {field: 'target_scope', display: 'Target Scope'},
-          {field: 'ghg_target', display: 'GHG Target?'},
-          {field: 'target_type', display: 'Target Type'},
-          {field: 'conditionality', display: 'Conditionality'},
-          {field: 'target_year', display: 'Target Year'},
-          {field: 'quote', display: 'Content'},
-          {field: 'page', display: 'Page Number'},
-          {field: 'verification_status', display: 'Verification Status'}
-      ];
-
-      const mitigationColumns = [
-          {field: 'category', display: 'Category'},
-          {field: 'purpose', display: 'Purpose'},
-          {field: 'instrument', display: 'Instrument'},
-          {field: 'quote', display: 'Quote'},
-          {field: 'asi', display: 'A-S-I'},
-          {field: 'page', display: 'Page Number'},
-          {field: 'verification_status', display: 'Verification Status'}
-      ];
-
-      const adaptationColumns = [
-          {field: 'category', display: 'Category'},
-          {field: 'measure', display: 'Measure'},
-          {field: 'quote', display: 'Quote'},
-          {field: 'page', display: 'Page Number'},
-          {field: 'verification_status', display: 'Verification Status'}
-      ];
-
-      // Create and insert tables with error handling
-      try {
-          const targetsContainer = document.getElementById('targets-table-container');
-          if (targetsContainer) {
-              targetsContainer.innerHTML = createTable(targetsData, targetsColumns, 'targets-table');
-          }
-          
-          const mitigationContainer = document.getElementById('mitigation-table-container');
-          if (mitigationContainer) {
-              mitigationContainer.innerHTML = createTable(mitigationData, mitigationColumns, 'mitigation-table');
-          }
-          
-          const adaptationContainer = document.getElementById('adaptation-table-container');
-          if (adaptationContainer) {
-              adaptationContainer.innerHTML = createTable(adaptationData, adaptationColumns, 'adaptation-table');
-          }
-
-          console.log('Excel preview loaded successfully');
-
-          // Show duplicate info in console
-          if (totalClassifications > uniqueQuotes) {
-              console.log(`✓ Multi-category quotes correctly displayed: ${totalClassifications - uniqueQuotes} quotes appear in multiple sheets`);
-          }
-
-      } catch (error) {
-          console.error('Error creating tables:', error);
-          
-          // Fallback error display
-          const containers = ['targets-table-container', 'mitigation-table-container', 'adaptation-table-container'];
-          containers.forEach(id => {
-              const container = document.getElementById(id);
-              if (container) {
-                  container.innerHTML = '<p class="text-danger p-3">Error loading data. Please check the browser console for details.</p>';
-              }
-          });
-      }
-  });
-  </script>
-
-</body>
-</html>
+<section class="two" id="preview">
+  <div class="panel" style="flex: 1 1 480px; min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 18px">
+    <div class="row-flex" id="domain-chips">
+      <button class="chip" aria-pressed="true" data-dom="all">All {{ rows|length }}</button>
+      {% for d, label in [('targets', 'Targets'), ('mitigation', 'Mitigation'), ('adaptation', 'Adaptation'), ('benefits', 'Benefits')] %}
+        {% if counts[d] %}<button class="chip" aria-pressed="false" data-dom="{{ d }}">{{ label }} {{ counts[d] }}</button>{% endif %}
+      {% endfor %}
+    </div>
+    <label class="field">Search quotes<input type="search" id="search" placeholder="e.g. charging, BRT, rail"></label>
+    <div id="cards" style="display: flex; flex-direction: column; gap: 10px; max-height: 760px; overflow: auto; padding-right: 4px">
+      {% for r in rows %}
+      {% set found = r.pdf_found if r.pdf_found is not none else r.pipeline_verified %}
+      <div class="card" data-id="{{ r.id }}" data-dom="{{ r.domain }}" data-page="{{ r.page or '' }}" tabindex="0">
+        <div class="meta"><span class="tag {{ r.domain }}">{{ dlabel[r.domain] }}</span><span class="muted">{{ r|rowlabels }}</span><span class="mono" style="margin-left: auto">p. {{ r.page or '?' }}</span></div>
+        <div style="font-size: 14px; line-height: 1.5">“{{ r.verbatim }}”</div>
+        <div class="row-flex small" style="gap: 8px 16px">
+          {% if found is sameas false %}<span style="color: var(--bad)">Not found word for word in the PDF. Check before use.</span>{% endif %}
+          <a href="{{ url_for('review.validate_page', task_id=task_id, row=r.id) }}" style="margin-left: auto">Fix in validation</a>
+        </div>
+      </div>
+      {% else %}
+      <p class="muted">No passages.</p>
+      {% endfor %}
+    </div>
+  </div>
+  <div style="flex: 1 1 480px; min-width: 0">
+    {% if has_pdf %}
+    <div class="viewer" id="viewer">
+      <div class="viewer-bar">
+        <span>Page <input data-page-input type="number" min="1" value="1" aria-label="Page number"> of <span data-page-count>…</span></span>
+        <span class="row-flex" style="gap: 6px">
+          <button type="button" data-zoom-out aria-label="Zoom out">−</button><button type="button" data-zoom-in aria-label="Zoom in">+</button>
+          <button type="button" data-prev aria-label="Previous page">‹</button><button type="button" data-next aria-label="Next page">›</button>
+        </span>
+      </div>
+      <div class="viewer-scroll" data-viewer-scroll style="max-height: 760px"><p style="padding: 24px">Loading PDF…</p></div>
+      <div class="viewer-foot"><span data-viewer-status></span><a href="{{ url_for('review.serve_pdf', task_id=task_id) }}" target="_blank" rel="noopener">Open full PDF in new tab</a></div>
+    </div>
+    {% else %}
+    <div class="banner warn">The PDF is not on the server anymore, so the preview is not available.</div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+  window.RESULTS = {
+    pdfUrl: {{ url_for('review.serve_pdf', task_id=task_id)|tojson }},
+    hasPdf: {{ 'true' if has_pdf else 'false' }},
+    rows: {{ rows|map(attribute='id')|list|tojson }},
+  };
+  window.RESULTS.rowData = {{ rows|tojson }}.map(function (r) { return {id: r.id, domain: r.domain, text: r.verbatim, page: r.pdf_page || r.page}; });
+</script>
+<script type="module" src="{{ url_for('static', filename='review/results.mjs') }}"></script>
+{% endblock %}
