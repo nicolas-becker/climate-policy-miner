@@ -119,6 +119,7 @@
     finalizeUrl: {{ url_for('review.finalize', task_id=task_id)|tojson }},
     pdfUrl: {{ url_for('review.serve_pdf', task_id=task_id)|tojson }},
     taxonomyUrl: {{ url_for('static', filename='review/taxonomy/ndc_taxonomy.json')|tojson }},
+    countriesUrl: {{ url_for('static', filename='review/taxonomy/countries.json')|tojson }},
   };
 </script>
 <script type="module" src="{{ url_for('static', filename='review/validate.mjs') }}"></script>

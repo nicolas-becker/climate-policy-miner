@@ -153,6 +153,21 @@ def _clean(value):
     return '' if text in ('--', 'nan', 'None') else text
 
 
+# Pipeline labels that are not taxonomy values (classification_utils.py).
+# Fallbacks mean "nothing found" and are left empty for the analyst to fill.
+_LABEL_FIXES = {
+    'No concrete category': '',
+    'No concrete purpose': '',
+    'No concrete ASI category': '',
+    'Freight transport shifting to rail of inland waterways': 'Freight transport shifting to rail or inland waterways',
+}
+
+
+def _label(value):
+    text = _clean(value)
+    return _LABEL_FIXES.get(text, text)
+
+
 def _page(value):
     try:
         return int(float(value))
@@ -209,25 +224,26 @@ def rows_from_pipeline(records):
                                 conditionality=_clean(rec.get('conditionality'))))
         if _is_true(rec.get('mitigation_measure')):
             rows.append(new_row('mitigation', **base,
-                                category=_clean(rec.get('category')),
-                                purpose=_clean(rec.get('purpose')),
-                                instrument=_clean(rec.get('instrument')),
-                                asi=_clean(rec.get('asi'))))
+                                category=_label(rec.get('category')),
+                                purpose=_label(rec.get('purpose')),
+                                instrument=_label(rec.get('instrument')),
+                                asi=_label(rec.get('asi'))))
         if _is_true(rec.get('adaptation_measure')):
             # postprocess_results() exports category/instrument as Category/Measure
             rows.append(new_row('adaptation', **base,
-                                adaptation_category=_clean(rec.get('category')),
-                                adaptation_measure=_clean(rec.get('instrument'))))
+                                adaptation_category=_label(rec.get('category')),
+                                adaptation_measure=_label(rec.get('instrument'))))
     return rows
 
 
 def default_document(filename):
-    stem = os.path.splitext(os.path.basename(filename or ''))[0]
     return {
-        'document_id': '', 'country_code': '', 'country': '',
-        'type_of_document': 'NDC', 'document_name': stem.replace('_', ' '),
-        'last_submission': '', 'generation': '', 'version': '',
-        'date': '', 'status': '', 'language': '', 'url': '', 'note': '',
+        'document_id': '', 'country_code': '', 'country': '', 'region': '',
+        'type_of_document': 'NDC', 'document_name': '',
+        'generation': '', 'version': '',
+        'date': '', 'status': '', 'language': '', 'url': '',
+        'note': '',            # exported as "Comments"
+        'backend_status': '',  # free text, exported as "Backend status"
         # '' means "derive from rows"; 'yes'/'no' or a label overrides
         'flags': {k: '' for k in FLAG_KEYS},
     }
@@ -319,6 +335,45 @@ def effective_flags(state):
     derived = derive_flags(state.get('rows', []))
     overrides = (state.get('document') or {}).get('flags') or {}
     return {k: (overrides.get(k) or derived.get(k, '')) for k in FLAG_KEYS}
+
+
+def load_countries():
+    if 'countries' not in _taxonomy_cache:
+        path = os.path.join(os.path.dirname(__file__), 'static', 'review', 'taxonomy', 'countries.json')
+        with open(path, 'r', encoding='utf-8') as f:
+            _taxonomy_cache['countries'] = json.load(f)
+    return _taxonomy_cache['countries']
+
+
+def _ordinal(n):
+    n = int(n)
+    suffix = 'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+    return f'{n}{suffix}'
+
+
+def document_name(doc):
+    """Database 'Document name' from type and generation, e.g. '3rd NDC'.
+    Mirrors documentName() in static/review/validate.mjs."""
+    kind = doc.get('type_of_document') or 'NDC'
+    gen = str(doc.get('generation') or '').strip()
+    if kind == 'NDC' and gen.isdigit():
+        return f'{_ordinal(gen)} NDC'
+    if kind == 'NDC':
+        return ''
+    return kind
+
+
+def effective_document(doc):
+    """Document details with the derived values filled in."""
+    doc = dict(doc or {})
+    code = str(doc.get('country_code') or '').strip().upper()
+    doc['country_code'] = code
+    hit = load_countries().get(code)
+    if hit:
+        doc['country'] = hit['country']
+        doc['region'] = hit['region']
+    doc['document_name'] = document_name(doc)
+    return doc
 
 
 def version_number(doc):
@@ -557,7 +612,7 @@ def results_context(task_id, state):
         'missing': len(missing_fields(rows)),
     }
 
-    doc = state.get('document') or {}
+    doc = effective_document(state.get('document'))
     return {
         'task_id': task_id,
         'state': state,
@@ -566,7 +621,7 @@ def results_context(task_id, state):
         'flags': effective_flags(state),
         'validated': bool(state.get('validated')),
         'validated_at': state.get('validated_at'),
-        'filename': state.get('filename') or doc.get('document_name') or 'document.pdf',
+        'filename': state.get('filename') or 'document.pdf',
         'pages': pages or None,
         'counts': {d: len(by[d]) for d in DOMAINS},
         'rows': sorted(rows, key=lambda r: (r.get('page') or 10 ** 6)),
@@ -751,7 +806,7 @@ def social_card(task_id):
     ctx = results_context(task_id, state)
     card = {
         'country': ctx['doc'].get('country') or '',
-        'document_name': ctx['doc'].get('document_name') or ctx['filename'],
+        'document_name': ' '.join(x for x in [ctx['doc'].get('document_name'), ctx['version_number'] and f"({ctx['version_number']})"] if x) or ctx['filename'],
         'date': ctx['doc'].get('date') or '',
         'validated': ctx['validated'],
         'asi': ctx['asi'],
@@ -917,7 +972,7 @@ def write_excel(state, path):
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
 
-    doc = state.get('document') or {}
+    doc = effective_document(state.get('document'))
     dv = _doc_values(doc)
     flags = effective_flags(state)
     rows = active_rows(state.get('rows', []))
@@ -925,22 +980,21 @@ def write_excel(state, path):
     wb = Workbook()
     ws = wb.active
     ws.title = 'Document'
-    doc_cols = ['Document ID', 'Country Code', 'Country', 'Type of document', 'Document name',
-                'Last submission', 'Version number', 'Date', 'Status'] + \
-               [FLAG_COLUMNS[k] for k in ['contains_transport_mitigation_target', 'summary_transport_target',
-                                          'ghg_transport_target_type', 'contains_transport_adaptation_target',
-                                          'contains_transport_mitigation_measures',
-                                          'contains_transport_adaptation_measures', 'contains_benefits',
-                                          'contains_just_transition', 'transport_content', 'transport_target',
-                                          'transport_measures']] + ['URL']
-    ws.append(doc_cols)
-    inv = {v: k for k, v in FLAG_COLUMNS.items()}
-    ws.append([
-        {'Document ID': dv['Document ID'], 'Country Code': dv['Country Code'], 'Country': dv['Country'],
-         'Type of document': doc.get('type_of_document', ''), 'Document name': dv['Document name'],
-         'Last submission': doc.get('last_submission', ''), 'Version number': dv['Version number'],
-         'Date': dv['Date'], 'Status': dv['Status'], 'URL': doc.get('url', '')}.get(c, flags.get(inv.get(c), ''))
-        for c in doc_cols])
+    flag_order = ['contains_transport_mitigation_target', 'summary_transport_target', 'ghg_transport_target_type',
+                  'contains_transport_adaptation_target', 'contains_transport_mitigation_measures',
+                  'contains_transport_adaptation_measures', 'contains_benefits', 'contains_just_transition',
+                  'transport_content', 'transport_target', 'transport_measures']
+    doc_row = [
+        ('Document ID', dv['Document ID']), ('Country Code', dv['Country Code']), ('Country', dv['Country']),
+        ('Check active', ''), ('Type of document', doc.get('type_of_document', '')),
+        ('Document name', dv['Document name']), ('Last submission', ''),  # filled from the Country sheet
+        ('Version number', dv['Version number']), ('Date', dv['Date']), ('Status', dv['Status']),
+    ] + [(FLAG_COLUMNS[k], flags.get(k, '')) for k in flag_order] + [
+        ('Comments', doc.get('note', '')), ('Backend status', doc.get('backend_status', '')),
+        ('URL', doc.get('url', '')),
+    ]
+    ws.append([c for c, _ in doc_row])
+    ws.append([v for _, v in doc_row])
 
     def sheet(title, cols, items):
         s = wb.create_sheet(title)
@@ -978,7 +1032,6 @@ def write_excel(state, path):
         s.append([r['id'], r['domain'], r['status'], r['source'], 'yes' if r.get('edited') else '',
                   r['page'], r['verbatim'], r['translation'], r['note'], ', '.join(missing.get(r['id'], []))])
     s.append([])
-    s.append(['Document note', doc.get('note', '')])
     s.append(['Document language', doc.get('language', '')])
 
     bold = Font(bold=True)
@@ -1014,7 +1067,7 @@ def write_highlighted_pdf(src, state, path):
 
 
 def write_summary_txt(state, path):
-    doc = state.get('document') or {}
+    doc = effective_document(state.get('document'))
     summary = state.get('summary') or {}
     sections = summary.get('sections') or {}
     rows = active_rows(state.get('rows', []))
@@ -1054,7 +1107,7 @@ def generate_review_summary(llm, state):
     """Summary of the reviewed rows. Differs from the pipeline summary in two
     ways: each bullet cites its pages, and figures are kept as written."""
     rows = active_rows(state.get('rows', []))
-    doc = state.get('document') or {}
+    doc = effective_document(state.get('document'))
 
     def block(domain, cond=None):
         sel = [r for r in rows if r['domain'] == domain and (cond is None or cond(r))]

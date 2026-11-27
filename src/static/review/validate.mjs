@@ -173,17 +173,44 @@ const FIELDS = {
 const DEPENDENT = { target_area: ['target_scope', 'target_type'], category: ['purpose', 'instrument'], purpose: ['instrument'], adaptation_category: ['adaptation_measure'] };
 
 // ---------------------------------------------------------------- document panel
+// Document sheet fields. Country and document name are derived, "Last
+// submission" and "Check active" are filled in the database itself.
 const DOC_FIELDS = [
-  ['document_id', 'Document ID', 'Assigned in the database'], ['country_code', 'Country code', 'e.g. KEN'],
-  ['country', 'Country', ''], ['type_of_document', 'Type of document', ''], ['document_name', 'Document name', ''],
-  ['last_submission', 'Last submission', ''], ['generation', 'Generation', 'e.g. 3'], ['version', 'Version', 'e.g. 0'],
-  ['date', 'Date', 'YYYY-MM-DD'], ['status', 'Status', ''], ['language', 'Language', 'e.g. English'],
+  ['document_id', 'Document ID', 'Assigned in the database'],
+  ['country_code', 'Country code', 'e.g. KEN'],
+  ['country', 'Country', 'Filled from the code', 'derived'],
+  ['type_of_document', 'Type of document', ''],
+  ['generation', 'Generation', 'e.g. 3'],
+  ['version', 'Version', 'e.g. 0'],
+  ['document_name', 'Document name', 'Filled from type and generation', 'derived'],
+  ['date', 'Date', 'YYYY-MM-DD'],
+  ['status', 'Status', ''],
+  ['language', 'Language', 'e.g. English'],
+  ['backend_status', 'Backend status', ''],
 ];
 const DOC_CHOICES = {
   type_of_document: ['NDC', 'LTS', 'National policy document', 'Other'],
-  last_submission: ['First Generation NDC', 'Second Generation NDC', 'Third Generation NDC', 'LTS', 'National policy document'],
   status: ['Active', 'Archived', 'Covered by EU', 'Covered by EU archived'],
 };
+let countries = {};
+
+function ordinal(n) {
+  const v = n % 100;
+  return n + ((v >= 11 && v <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th'));
+}
+// Same rule as document_name() in review.py.
+function documentName(d) {
+  const kind = d.type_of_document || 'NDC';
+  const gen = String(d.generation || '').trim();
+  if (kind === 'NDC') return /^\d+$/.test(gen) ? `${ordinal(Number(gen))} NDC` : '';
+  return kind;
+}
+function applyDerived(d) {
+  const hit = countries[String(d.country_code || '').trim().toUpperCase()];
+  d.country = hit ? hit.country : '';
+  d.region = hit ? hit.region : '';
+  d.document_name = documentName(d);
+}
 const FLAG_FIELDS = [
   ['transport_content', 'Transport content', ['yes', 'no']],
   ['transport_target', 'Transport target (mitigation or/and adaptation)', ['yes', 'no']],
@@ -200,26 +227,37 @@ const FLAG_FIELDS = [
 
 function renderDoc() {
   const d = state.document;
+  applyDerived(d);
   const box = $('#doc-fields');
-  const input = ([k, label, ph]) => {
+  const input = ([k, label, ph, derived]) => {
     const choices = DOC_CHOICES[k];
     const val = d[k] ?? '';
-    const control = choices
-      ? `<select data-doc="${k}"><option value=""></option>${[...new Set([...choices, val].filter(Boolean))].map((c) => `<option ${c === val ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`
-      : `<input data-doc="${k}" value="${esc(val)}" placeholder="${esc(ph)}">`;
+    let control;
+    if (derived) control = `<input data-derived="${k}" value="${esc(val)}" placeholder="${esc(ph)}" readonly tabindex="-1" style="background:#F2F6F8">`;
+    else if (choices) control = `<select data-doc="${k}"><option value=""></option>${[...new Set([...choices, val].filter(Boolean))].map((c) => `<option ${c === val ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`;
+    else control = `<input data-doc="${k}" value="${esc(val)}" placeholder="${esc(ph)}" ${k === 'country_code' ? 'list="country-codes" maxlength="3" style="text-transform:uppercase"' : ''}>`;
     return `<label class="field mono-label">${esc(label)}${control}</label>`;
   };
   box.innerHTML = `
+    <datalist id="country-codes">${Object.entries(countries).map(([c, v]) => `<option value="${c}">${esc(v.country)}</option>`).join('')}</datalist>
     <div class="grid g6">${DOC_FIELDS.map(input).join('')}
       <label class="field mono-label">URL<input data-doc="url" value="${esc(d.url)}" placeholder="https://unfccc.int/…"></label></div>
-    <label class="field mono-label">Note<textarea data-doc="note" rows="2" placeholder="e.g. which earlier submission this document replaces">${esc(d.note)}</textarea></label>
+    <p class="small muted" style="margin: 0">Version number in the export: <b id="vn"></b>. Last submission and Check active are left empty and filled in the database.</p>
     <div style="display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid #EAF2F5">
       <div class="spread small"><b style="font-size: 13px">Transport content</b><span class="muted">Filled in from the rows. Change a value only if the rows are incomplete.</span></div>
       <div class="grid g4" id="flag-fields"></div>
     </div>
-    <p class="small muted" style="margin: 0">Version number in the export: <b id="vn"></b></p>`;
+    <label class="field mono-label">Comments<textarea data-doc="note" rows="2" placeholder="e.g. which earlier submission this document replaces">${esc(d.note)}</textarea></label>`;
   box.querySelectorAll('[data-doc]').forEach((el) => {
-    el.addEventListener('input', () => { d[el.dataset.doc] = el.value; updateVersion(); changed({ rerenderList: false }); });
+    el.addEventListener('input', () => {
+      d[el.dataset.doc] = el.dataset.doc === 'country_code' ? el.value.trim().toUpperCase() : el.value;
+      applyDerived(d);
+      box.querySelectorAll('[data-derived]').forEach((x) => { x.value = d[x.dataset.derived] || ''; });
+      const cc = box.querySelector('[data-doc="country_code"]');
+      cc.style.borderColor = d.country_code && !d.country ? 'var(--bad-line)' : '';
+      updateVersion();
+      changed({ rerenderList: false });
+    });
   });
   renderFlags();
   updateVersion();
@@ -581,11 +619,13 @@ async function finish() {
 
 // ---------------------------------------------------------------- start
 async function init() {
-  const [srv, taxonomy] = await Promise.all([
+  const [srv, taxonomy, countryList] = await Promise.all([
     fetch(CFG.stateUrl).then((r) => r.json()),
     fetch(CFG.taxonomyUrl).then((r) => r.json()),
+    fetch(CFG.countriesUrl).then((r) => r.json()).catch(() => ({})),
   ]);
   tax = taxonomy;
+  countries = countryList;
   state = srv;
   let local = null;
   try { local = JSON.parse(localStorage.getItem(LOCAL_KEY) || 'null'); } catch (e) { local = null; }
@@ -639,7 +679,7 @@ async function init() {
         url: CFG.pdfUrl,
         onSelection: (text, page) => {
           ui.selectionText = text; ui.selectionPage = page;
-          selBtn.classList.toggle('hidden', text.length < 10);
+          selBtn.classList.toggle('hidden', text.length < 3);
         },
       });
       selBtn.addEventListener('click', () => {

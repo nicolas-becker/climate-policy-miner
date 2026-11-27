@@ -22,6 +22,7 @@ export async function createViewer({ root, url, onPageChange, onSelection }) {
   let zoom = 1;
   let highlights = [];
   let renderToken = 0;
+  const sel = { layer: null };
   pageCount.textContent = pdf.numPages;
 
   async function pageText(n) {
@@ -110,6 +111,9 @@ export async function createViewer({ root, url, onPageChange, onSelection }) {
     await textLayer.render();
     if (token !== renderToken) return;
 
+    layer.addEventListener('mousedown', () => { if (onSelection) onSelection('', current); });
+    sel.layer = layer;
+
     scroll.replaceChildren(wrap);
     pageInput.value = current;
 
@@ -152,13 +156,21 @@ export async function createViewer({ root, url, onPageChange, onSelection }) {
   root.querySelector('[data-zoom-out]')?.addEventListener('click', () => { zoom = Math.max(0.5, zoom - 0.25); render(); });
   pageInput?.addEventListener('change', () => goTo(pageInput.value));
 
-  if (onSelection) {
-    scroll.addEventListener('mouseup', () => {
-      const sel = window.getSelection();
-      const text = sel ? sel.toString().replace(/\s+/g, ' ').trim() : '';
-      onSelection(text, current);
-    });
-  }
+  // Report text selected inside the page, wherever the mouse is released.
+  // Empty selections are not reported, so clicking a button outside the PDF
+  // (which clears the selection) does not hide that button first.
+  let reportTimer;
+  document.addEventListener('selectionchange', () => {
+    if (!onSelection || !sel.layer) return;
+    clearTimeout(reportTimer);
+    reportTimer = setTimeout(() => {
+      const selection = document.getSelection();
+      if (!selection || !selection.rangeCount || selection.isCollapsed) return;
+      if (!selection.getRangeAt(0).intersectsNode(sel.layer)) return;
+      const text = selection.toString().replace(/\s+/g, ' ').trim();
+      if (text) onSelection(text, current);
+    }, 120);
+  });
 
   let resizeTimer;
   window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 200); });

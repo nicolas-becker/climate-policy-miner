@@ -51,9 +51,9 @@
 <section class="panel" style="padding: 14px 20px; display: flex; flex-direction: column; gap: 10px">
   <div class="details-row">
     {% set country = (doc.country or '') ~ ((' (' ~ doc.country_code ~ ')') if doc.country_code else '') %}
-    {% for k, v in [('Country', country), ('Type of document', doc.type_of_document), ('Document name', doc.document_name),
-                    ('Last submission', doc.last_submission), ('Generation', doc.generation), ('Version', doc.version),
-                    ('Date', doc.date), ('Status', doc.status), ('Language', doc.language)] %}
+    {% for k, v in [('Country', country), ('Type of document', doc.type_of_document), ('Generation', doc.generation),
+                    ('Version', doc.version), ('Document name', doc.document_name), ('Date', doc.date),
+                    ('Status', doc.status), ('Language', doc.language)] %}
       <div style="display: flex; flex-direction: column; gap: 2px"><span class="k">{{ k }}</span><span class="v">{{ v or 'not set' }}</span></div>
     {% endfor %}
     <a href="{{ url_for('review.validate_page', task_id=task_id) }}" style="margin-left: auto; font-size: 13px">Edit document details</a>
